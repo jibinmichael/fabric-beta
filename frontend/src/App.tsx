@@ -41,6 +41,21 @@ const PRICE_OUTPUT_PER_M = 15.00
 const PRICE_CACHE_WRITE_PER_M = 3.75   // 1.25× input
 const PRICE_CACHE_READ_PER_M = 0.30    // 0.10× input
 
+// Format a USD amount with $ sign. Show "<$0.01" for amounts
+// below 1 cent so it doesn't read as "free".
+function fmtDollars(n: number): string {
+  if (n <= 0) return "$0.00"
+  if (n < 0.01) return "<$0.01"
+  return `$${n.toFixed(2)}`
+}
+
+// Format a token count compactly: 4475 → "4.5K", 73625 → "73.6K",
+// 500 → "500". Used in the inline token-cost badge.
+function formatTokens(n: number): string {
+  if (n < 1000) return n.toString()
+  return `${(n / 1000).toFixed(1)}K`
+}
+
 type PlanItem = {
   text: string
   status: "queued" | "active" | "done"
@@ -1709,11 +1724,11 @@ export default function App() {
 
                           let line1: string
                           if (cacheRead > 0) {
-                            line1 = `${cacheRead.toLocaleString()} cached · ${inputTok.toLocaleString()} input · ${outputTok.toLocaleString()} output`
+                            line1 = `${formatTokens(inputTok)} input · ${formatTokens(outputTok)} output · ${formatTokens(cacheRead)} cached`
                           } else if (cacheCreate > 0) {
-                            line1 = `${cacheCreate.toLocaleString()} cache primed · ${inputTok.toLocaleString()} input · ${outputTok.toLocaleString()} output`
+                            line1 = `${formatTokens(inputTok)} input · ${formatTokens(outputTok)} output · ${formatTokens(cacheCreate)} cached for reuse`
                           } else {
-                            line1 = `${inputTok.toLocaleString()} input · ${outputTok.toLocaleString()} output`
+                            line1 = `${formatTokens(inputTok)} input · ${formatTokens(outputTok)} output`
                           }
 
                           let line2: string | null = null
@@ -1728,10 +1743,17 @@ export default function App() {
                               (totalInputEquivalent * PRICE_INPUT_PER_M
                                 + outputTok * PRICE_OUTPUT_PER_M) / 1_000_000
                             const saved = costWithoutCaching - costWithCaching
-                            const savedPct = costWithoutCaching > 0 ? (saved / costWithoutCaching) * 100 : 0
-                            line2 = `Saved ~${(saved * 100).toFixed(1)}¢ (${savedPct.toFixed(0)}% off)`
+                            line2 = `Cost ~${fmtDollars(costWithCaching)} · without caching: ~${fmtDollars(costWithoutCaching)} · saved ~${fmtDollars(saved)}`
                           } else if (cacheCreate > 0) {
-                            line2 = "Cache primed — savings start on next turn"
+                            const costWithCaching =
+                              (inputTok * PRICE_INPUT_PER_M
+                                + cacheCreate * PRICE_CACHE_WRITE_PER_M
+                                + outputTok * PRICE_OUTPUT_PER_M) / 1_000_000
+                            const estimatedNextTurnCost =
+                              (inputTok * PRICE_INPUT_PER_M
+                                + cacheCreate * PRICE_CACHE_READ_PER_M
+                                + outputTok * PRICE_OUTPUT_PER_M) / 1_000_000
+                            line2 = `Cost ~${fmtDollars(costWithCaching)} · cache built (next turn will be ~${fmtDollars(estimatedNextTurnCost)})`
                           }
 
                           return (
