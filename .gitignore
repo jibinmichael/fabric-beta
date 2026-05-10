@@ -8,5 +8,8 @@ fabric
 # Claude Code per-machine settings (not source)
 .claude/
 
+# Chisel design-system scanner cache (regenerates)
+.chisel/
+
 # macOS Finder metadata
 .DS_Store
