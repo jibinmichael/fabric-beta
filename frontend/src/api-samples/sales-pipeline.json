@@ -1,0 +1,344 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "API Documentation V3",
+    "version": "v3"
+  },
+  "paths": {
+    "/api/ext/v3/salesAnalytics/pipeline": {
+      "post": {
+        "tags": [
+          "SalesAnalytics"
+        ],
+        "summary": "Get sales pipeline",
+        "description": "Note:\n- From date and to date are in ISO 8601 format of UTC timezone.\n- Set agentIds to null or exclude it to include all agents in the results.\n- Set stageIds to null or exclude it to include all stages in the results.",
+        "requestBody": {
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetSalesPipelineRequest"
+              },
+              "example": {
+                "from": "2025-12-30T02:50:13.5508281Z",
+                "to": "2026-01-06T02:50:13.5508288Z",
+                "agentIds": [
+                  "650a26c6f84a9c0dd6ad66e1",
+                  "650a26c6f84a9c0dd6ad66e2"
+                ],
+                "selectedStageIds": [
+                  "650a26c6f84a9c0dd6ad66e3",
+                  "650a26c6f84a9c0dd6ad66e4"
+                ]
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetSalesPipelineRequest"
+              },
+              "example": {
+                "from": "2025-12-30T02:50:13.5508281Z",
+                "to": "2026-01-06T02:50:13.5508288Z",
+                "agentIds": [
+                  "650a26c6f84a9c0dd6ad66e1",
+                  "650a26c6f84a9c0dd6ad66e2"
+                ],
+                "selectedStageIds": [
+                  "650a26c6f84a9c0dd6ad66e3",
+                  "650a26c6f84a9c0dd6ad66e4"
+                ]
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetSalesPipelineRequest"
+              },
+              "example": {
+                "from": "2025-12-30T02:50:13.5508281Z",
+                "to": "2026-01-06T02:50:13.5508288Z",
+                "agentIds": [
+                  "650a26c6f84a9c0dd6ad66e1",
+                  "650a26c6f84a9c0dd6ad66e2"
+                ],
+                "selectedStageIds": [
+                  "650a26c6f84a9c0dd6ad66e3",
+                  "650a26c6f84a9c0dd6ad66e4"
+                ]
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetSalesPipelineRequest"
+              },
+              "example": {
+                "from": "2025-12-30T02:50:13.5508281Z",
+                "to": "2026-01-06T02:50:13.5508288Z",
+                "agentIds": [
+                  "650a26c6f84a9c0dd6ad66e1",
+                  "650a26c6f84a9c0dd6ad66e2"
+                ],
+                "selectedStageIds": [
+                  "650a26c6f84a9c0dd6ad66e3",
+                  "650a26c6f84a9c0dd6ad66e4"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Returns the sales pipeline data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSalesPipelineResponse"
+                },
+                "example": {
+                  "win_rate": 20,
+                  "entries": [
+                    {
+                      "stage": "New Lead",
+                      "count": 150
+                    },
+                    {
+                      "stage": "Contacted",
+                      "count": 90
+                    },
+                    {
+                      "stage": "Qualified",
+                      "count": 80
+                    },
+                    {
+                      "stage": "Proposal",
+                      "count": 50
+                    },
+                    {
+                      "stage": "Deal Won",
+                      "count": 100
+                    },
+                    {
+                      "stage": "Deal Lost",
+                      "count": 30
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request is unauthorized."
+          },
+          "403": {
+            "description": "The request is forbidden.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenRequestResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Either the rate limit has been exceeded or usage limits have been reached."
+          },
+          "500": {
+            "description": "Unexpected error occurred. Please try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnexpectedErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ForbiddenRequestResponse": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "The error code associated with the error.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "The descriptive error message explaining what went wrong.",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "The timestamp indicating when the error was recorded.",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents the result of a forbidden request, containing error details."
+      },
+      "GetSalesPipelineRequest": {
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The start date to get the sales pipeline in ISO 8601 format of UTC timezone.",
+            "format": "date-time",
+            "example": "2025-12-01T00:00:00Z"
+          },
+          "to": {
+            "type": "string",
+            "description": "The end date to get the sales pipeline in ISO 8601 format of UTC timezone.",
+            "format": "date-time",
+            "example": "2025-12-08T23:59:59Z"
+          },
+          "agentIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The list of agent IDs. Each ID must be a valid ObjectId.\nNote: Set agentIds to null or exclude it to include all agents in the results.",
+            "nullable": true
+          },
+          "selectedStageIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The list of stage IDs to filter.\nNote: Set stageIds to null or exclude it to include all stages in the results.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request model for getting the sales pipeline."
+      },
+      "GetSalesPipelineResponse": {
+        "type": "object",
+        "properties": {
+          "win_rate": {
+            "type": "number",
+            "description": "The overall win rate as a percentage.",
+            "format": "double"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StagePipelineDto"
+            },
+            "description": "The list of stage pipeline entries.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response model for getting sales pipeline."
+      },
+      "InvalidRequestResponse": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "The error code associated with the error.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "The descriptive error message explaining what went wrong.",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "The timestamp indicating when the error was recorded.",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents the result of a bad request, containing error details."
+      },
+      "StagePipelineDto": {
+        "type": "object",
+        "properties": {
+          "stage": {
+            "type": "string",
+            "description": "The name of the stage.",
+            "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "description": "The count of leads in this stage.",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents a stage pipeline entry."
+      },
+      "UnexpectedErrorResponse": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "The error code associated with the error.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "The descriptive error message explaining what went wrong.",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "The timestamp indicating when the error was recorded.",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Represents an unexpected error."
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "apiKey",
+        "description": "Enter 'Bearer' [space] and then your token in the text input below.\n                      Example: 'Bearer 12345abcdef'",
+        "name": "Authorization",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "Bearer": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://live-mt-server.wati.io"
+    }
+  ],
+  "x-readme": {}
+}

@@ -1,0 +1,12 @@
+build/bin
+node_modules
+frontend/dist
+
+# Locally-built Wails binary (rebuild with `wails build`)
+fabric
+
+# Claude Code per-machine settings (not source)
+.claude/
+
+# macOS Finder metadata
+.DS_Store
