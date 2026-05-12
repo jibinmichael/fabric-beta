@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
@@ -1887,7 +1887,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {messages.map((message) => {
+                  {messages.map((message, idx) => {
                     const display = assistantDisplayContent(message)
                     if (message.role === "user") {
                       return (
@@ -1966,9 +1966,69 @@ export default function App() {
                             {display.sub}
                           </div>
                         ) : null}
-                        {MANUS_CARDS_MODE && message.deliverable ? (
-                          <DeliverableView deliverable={message.deliverable} />
-                        ) : null}
+                        {(() => {
+                          if (message.isGenerating) return null
+                          const mvi = versions.findIndex((v) => v.msgIndex === idx)
+                          if (mvi < 0) return null
+                          const versionNum = mvi + 1
+                          const isCurrent = mvi === currentVersionIdx
+                          const promptExcerpt = versions[mvi].prompt
+                            ? truncatePrompt(versions[mvi].prompt, 80)
+                            : ""
+                          const sharedStyle: CSSProperties = {
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 500,
+                            lineHeight: 1.4,
+                            marginTop: 8,
+                          }
+                          if (isCurrent) {
+                            return (
+                              <span
+                                style={{
+                                  ...sharedStyle,
+                                  backgroundColor: "#F5F5F5",
+                                  border: "1px solid transparent",
+                                  color: "#1A1A1A",
+                                }}
+                              >
+                                <span
+                                  aria-hidden
+                                  style={{
+                                    width: 6,
+                                    height: 6,
+                                    borderRadius: "50%",
+                                    backgroundColor: "#16A34A",
+                                    display: "inline-block",
+                                  }}
+                                />
+                                Currently viewing
+                              </span>
+                            )
+                          }
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => void selectVersion(mvi)}
+                              title={promptExcerpt}
+                              className="hover:bg-[#F5F5F5]"
+                              style={{
+                                ...sharedStyle,
+                                backgroundColor: "transparent",
+                                border: "1px solid #DDDDDD",
+                                color: "#666666",
+                                cursor: "pointer",
+                                transition: "background-color 120ms ease",
+                              }}
+                            >
+                              {`View V${versionNum}`}
+                            </button>
+                          )
+                        })()}
                         {message.usage ? (() => {
                           const inputTok = message.usage.input_tokens
                           const outputTok = message.usage.output_tokens
