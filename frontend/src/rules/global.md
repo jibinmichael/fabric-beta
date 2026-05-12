@@ -126,12 +126,17 @@ kebab-case name. NEVER fall back to a real component.
 
 ## Mock data sourcing (MANDATORY)
 
-All mock data used in generated previews MUST come from the sandbox 
-personas in personas.md. Do NOT invent new customer names. Do NOT use 
-generic placeholders like "John Doe", "Acme Corp", or "Sample Company". 
-Pick the persona that best matches the prompt context and use their 
-realistic numbers, template names, broadcast titles, and language 
-fragments.
+Use generic placeholder data for previews:
+- Broadcasts: "Broadcast 1", "Broadcast 2", "Weekly Campaign", "Promo Drop"
+- Templates: "template_a", "template_b", "order_confirmation", "promo_alert"
+- Customers: "Customer 1", "Customer #123", "Sample Customer"
+- Contacts: "Contact 1", "Phone +1-555-0100", "user@example.com"
+- Numbers: round, illustrative figures (1,200 contacts, 45%, 78%) —
+  not overly specific or realistic-business-flavored
+
+Do NOT invent specific business names like "Mike's Pizza Shop" or
+"Sarah's Boutique". Do NOT use realistic regional/cultural references
+to make data feel authentic. Generic > plausible-fake for previews.
 
 ## Hard Rules
 

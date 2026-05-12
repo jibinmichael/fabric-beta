@@ -3,7 +3,6 @@ import broadcastsSpec from "../api-samples/broadcasts.json"
 import salesPipelineSpec from "../api-samples/sales-pipeline.json"
 import watiSchemaRaw from "./wati-schema.json?raw"
 import globalRules from "../rules/global.md?raw"
-import personasRules from "../rules/personas.md?raw"
 import analyticsArchetype from "../rules/archetypes/analytics.md?raw"
 
 // Feature flag — toggle to false to revert to single-section PRD.
@@ -523,8 +522,6 @@ general guidance above when generating Wati UI. Treat them as hard
 constraints, not suggestions.
 
 ${globalRules}
-
-${personasRules}
 
 ${analyticsArchetype}
 
