@@ -1776,7 +1776,7 @@ export default function App() {
                     <div
                       className="truncate"
                       style={{
-                        fontSize: 13,
+                        fontSize: 9,
                         fontWeight: 500,
                         color: "#1A1A1A",
                       }}
