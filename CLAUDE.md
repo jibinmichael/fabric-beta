@@ -126,6 +126,7 @@ Cost copy format (verified working):
 - **UI state:** Streaming assistant messages render `__THINKING__` marker before content, then stream tokens. `Generating…` indicator at message header during stream.
 - **Toasts:** Use `showToast()` for silent failures (e.g. session-switch rejections).
 - **No `localStorage`/`sessionStorage` for app state** — desktop app uses Wails file storage via Go backend.
+- **App-level UI state lives in `state.json`** (Go `appState` struct, alongside `ActiveSessionID`). Examples: `SidebarCollapsed`. Add new fields with `omitempty`. `persistAppState(activeID)` reads the existing state and only mutates the active session id, so sibling fields are preserved across session changes. Per-chat UI state (selectedVersionIndex etc.) is **transient** — never persisted. **Sidebar collapse is app-level, not per-chat** — do not tie it to session state, do not reset on session switch.
 - **Iteration history — auto-fork-on-edit semantics:** A "version" is any assistant message in `messages[]` with `tsxGenerated === true`. Selecting an older version via the preview-pane dropdown is **transient view state only** (`selectedVersionIndex` resets on session switch and on stream completion). If a user types a new prompt while viewing an older version, `messages[]` is **truncated** after that version's index before the new turn appends — later versions are discarded. The "Fork from here" action in the dropdown is the preservation path: it creates a new chat containing `messages[0..versionIndex]` and switches the user to it; the original chat is untouched. Preview swap on version select calls `WriteGeneratedCode(tsx)` (live file only, does NOT touch `cached_preview.tsx`), so on session reload the latest version is correctly restored. Future sessions: do not redesign this; the auto-fork default is intentional.
 
 ---
@@ -147,6 +148,7 @@ Cost copy format (verified working):
 ## Shipped
 
 - **Iteration history UI** — version dropdown in preview-pane header (`V{n} of {total} ▾`). Hidden when ≤1 version. Click row → preview swaps via `WriteGeneratedCode`. Hover-revealed "Fork from here" creates a new chat containing the version prefix and switches to it. Auto-fork-on-edit is the default when typing while viewing an older version; warning appears above the chat input ("Typing will fork from Vn — Vm will be lost"). Auto-snaps to latest on stream complete. Per-message `created_at` field added to Go `ChatMessage` struct (additive, `omitempty`). See Conventions for the auto-fork rationale.
+- **Collapsible sidebar (DeepSeek-style)** — sidebar toggles between expanded (240px) and collapsed (60px) via `PanelLeftClose`/`PanelLeftOpen` icon button in the sidebar header. Collapsed mode shows icon-only toggle + new-chat (Plus); chat list fades out. Width transitions 200ms ease-out. State persisted via Go `appState.SidebarCollapsed`, accessed through `GetSidebarCollapsed()` / `SetSidebarCollapsed(bool)` Wails methods. Refactored Go `persistAppState` to preserve sibling fields (was previously overwriting the whole struct on every session change).
 
 ## Pending work (highest leverage first)
 

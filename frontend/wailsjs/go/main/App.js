@@ -42,6 +42,10 @@ export function GetSessionPRD(arg1) {
   return window['go']['main']['App']['GetSessionPRD'](arg1);
 }
 
+export function GetSidebarCollapsed() {
+  return window['go']['main']['App']['GetSidebarCollapsed']();
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
@@ -76,6 +80,10 @@ export function SaveSessionPRD(arg1, arg2) {
 
 export function SaveSessionPreview(arg1, arg2) {
   return window['go']['main']['App']['SaveSessionPreview'](arg1, arg2);
+}
+
+export function SetSidebarCollapsed(arg1) {
+  return window['go']['main']['App']['SetSidebarCollapsed'](arg1);
 }
 
 export function WriteGeneratedCode(arg1) {

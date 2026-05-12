@@ -36,7 +36,8 @@ type chatFile struct {
 }
 
 type appState struct {
-	ActiveSessionID string `json:"active_session_id"`
+	ActiveSessionID  string `json:"active_session_id"`
+	SidebarCollapsed bool   `json:"sidebar_collapsed,omitempty"`
 }
 
 // SessionData is returned from LoadSession / BootstrapSessions.
@@ -86,7 +87,7 @@ func (a *App) loadAppState() appState {
 	return st
 }
 
-func (a *App) persistAppState(activeID string) error {
+func (a *App) writeAppState(st appState) error {
 	path, err := a.statePath()
 	if err != nil {
 		return err
@@ -94,8 +95,7 @@ func (a *App) persistAppState(activeID string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	payload := appState{ActiveSessionID: activeID}
-	data, err := json.MarshalIndent(payload, "", "  ")
+	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -111,6 +111,26 @@ func (a *App) persistAppState(activeID string) error {
 		return err
 	}
 	return os.Chmod(path, 0o644)
+}
+
+func (a *App) persistAppState(activeID string) error {
+	st := a.loadAppState()
+	st.ActiveSessionID = activeID
+	return a.writeAppState(st)
+}
+
+// GetSidebarCollapsed returns whether the sidebar should render in
+// collapsed mode at startup. Default false.
+func (a *App) GetSidebarCollapsed() bool {
+	return a.loadAppState().SidebarCollapsed
+}
+
+// SetSidebarCollapsed persists the sidebar collapse state without
+// touching the active session id.
+func (a *App) SetSidebarCollapsed(collapsed bool) error {
+	st := a.loadAppState()
+	st.SidebarCollapsed = collapsed
+	return a.writeAppState(st)
 }
 
 func randomSessionSuffix(n int) string {

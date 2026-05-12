@@ -22,6 +22,8 @@ export function GetPreviewStatus():Promise<string>;
 
 export function GetSessionPRD(arg1:string):Promise<string>;
 
+export function GetSidebarCollapsed():Promise<boolean>;
+
 export function Greet(arg1:string):Promise<string>;
 
 export function KillPreviewServer():Promise<void>;
@@ -39,6 +41,8 @@ export function SaveMessages(arg1:string,arg2:Array<main.ChatMessage>):Promise<v
 export function SaveSessionPRD(arg1:string,arg2:string):Promise<void>;
 
 export function SaveSessionPreview(arg1:string,arg2:string):Promise<void>;
+
+export function SetSidebarCollapsed(arg1:boolean):Promise<void>;
 
 export function WriteGeneratedCode(arg1:string):Promise<void>;
 
