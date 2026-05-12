@@ -124,6 +124,15 @@ audience where craft happens (designers/devs fill them in), not AI.
 If a slot name doesn't exist for what you need, invent a descriptive 
 kebab-case name. NEVER fall back to a real component.
 
+## Mock data sourcing (MANDATORY)
+
+All mock data used in generated previews MUST come from the sandbox 
+personas in personas.md. Do NOT invent new customer names. Do NOT use 
+generic placeholders like "John Doe", "Acme Corp", or "Sample Company". 
+Pick the persona that best matches the prompt context and use their 
+realistic numbers, template names, broadcast titles, and language 
+fragments.
+
 ## Hard Rules
 
 - ALWAYS sentence case.
