@@ -1,10 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk"
 import type { BetaRawMessageStreamEvent } from "@anthropic-ai/sdk/resources/beta/messages/messages"
-import type { TextBlockParam, Usage } from "@anthropic-ai/sdk/resources/messages"
+import type {
+  ImageBlockParam,
+  TextBlockParam,
+  Usage,
+} from "@anthropic-ai/sdk/resources/messages"
+
+export type ClaudeContentBlock = TextBlockParam | ImageBlockParam
 
 export type ClaudeMessage = {
   role: "user" | "assistant"
-  content: string
+  content: string | Array<ClaudeContentBlock>
 }
 
 const PRIMARY_MODEL = "claude-sonnet-4-6"

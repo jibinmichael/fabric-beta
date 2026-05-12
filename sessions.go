@@ -24,11 +24,21 @@ type SessionMeta struct {
 }
 
 // ChatMessage is one row in chat.json.
+// ChatMessageImage is a base64-inline attachment on a user message.
+// v1 stores raw bytes in chat.json — see CLAUDE.md Tech Debt for the
+// per-session attachments/ folder migration path.
+type ChatMessageImage struct {
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+	Filename  string `json:"filename,omitempty"`
+}
+
 type ChatMessage struct {
-	Role         string    `json:"role"`
-	Content      string    `json:"content"`
-	TsxGenerated bool      `json:"tsx_generated,omitempty"`
-	CreatedAt    time.Time `json:"created_at,omitempty"`
+	Role         string             `json:"role"`
+	Content      string             `json:"content"`
+	TsxGenerated bool               `json:"tsx_generated,omitempty"`
+	CreatedAt    time.Time          `json:"created_at,omitempty"`
+	Images       []ChatMessageImage `json:"images,omitempty"`
 }
 
 type chatFile struct {

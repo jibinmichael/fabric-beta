@@ -1,11 +1,28 @@
 export namespace main {
 	
+	export class ChatMessageImage {
+	    media_type: string;
+	    data: string;
+	    filename?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatMessageImage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.media_type = source["media_type"];
+	        this.data = source["data"];
+	        this.filename = source["filename"];
+	    }
+	}
 	export class ChatMessage {
 	    role: string;
 	    content: string;
 	    tsx_generated?: boolean;
 	    // Go type: time
 	    created_at?: any;
+	    images?: ChatMessageImage[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatMessage(source);
@@ -17,6 +34,7 @@ export namespace main {
 	        this.content = source["content"];
 	        this.tsx_generated = source["tsx_generated"];
 	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.images = this.convertValues(source["images"], ChatMessageImage);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -37,6 +55,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	export class SessionMeta {
 	    id: string;
 	    title: string;

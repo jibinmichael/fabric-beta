@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type ClipboardEvent, type DragEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
@@ -26,8 +26,8 @@ import {
   WriteGeneratedCode,
 } from "../wailsjs/go/main/App"
 import { EventsOn } from "../wailsjs/runtime/runtime"
-import { MoreHorizontal, ChevronRight, ChevronDown, FileText, CheckCircle, Wrench, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react"
-import { streamChat, type ClaudeMessage } from "@/lib/claude"
+import { MoreHorizontal, ChevronRight, ChevronDown, FileText, CheckCircle, Wrench, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, X as XIcon } from "lucide-react"
+import { streamChat, type ClaudeContentBlock, type ClaudeMessage } from "@/lib/claude"
 import { buildSystemPrompt } from "@/lib/systemPrompt"
 import type { Usage } from "@anthropic-ai/sdk/resources/messages"
 import { main } from "../wailsjs/go/models"
@@ -80,6 +80,24 @@ type DeliverableSummary = {
   cards: PersonaCardData[]
 }
 
+// Image attached to a user message. Base64-inline (v1; will move to
+// per-session attachments/ folder later — see CLAUDE.md Tech Debt).
+type ChatImage = {
+  media_type: "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+  data: string
+  filename?: string
+}
+
+const MAX_IMAGES_PER_MESSAGE = 5
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB raw
+const COMPRESS_THRESHOLD_BYTES = 2 * 1024 * 1024 // 2 MB → compress
+const ACCEPTED_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+])
+
 type Message = {
   id: string
   role: "user" | "assistant"
@@ -93,6 +111,7 @@ type Message = {
   deliverable?: DeliverableSummary
   usage?: Usage
   timestamp?: Date
+  images?: ChatImage[]
 }
 
 type SessionMetaView = {
@@ -367,6 +386,85 @@ function formatSessionTimestamp(d: Date): string {
 
 // "2 minutes ago" / "yesterday" / "May 8" style relative formatter.
 // Returns "earlier" when timestamp is missing or the Go zero time.
+// Reads a File as a base64 data string (no data: prefix).
+async function readFileAsBase64(file: File): Promise<string> {
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ""))
+    reader.onerror = () => reject(reader.error ?? new Error("read error"))
+    reader.readAsDataURL(file)
+  })
+  const comma = dataUrl.indexOf(",")
+  return comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl
+}
+
+// Compresses a large image via canvas → JPEG (quality 0.85). Caps
+// max dimension at 2048px. Returns a new ChatImage with media_type
+// "image/jpeg" regardless of input format. Loses transparency.
+async function compressImage(file: File): Promise<ChatImage> {
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ""))
+    reader.onerror = () => reject(reader.error ?? new Error("read error"))
+    reader.readAsDataURL(file)
+  })
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image()
+    el.onload = () => resolve(el)
+    el.onerror = () => reject(new Error("image decode failed"))
+    el.src = dataUrl
+  })
+  const maxDim = 2048
+  let { width, height } = img
+  if (width > maxDim || height > maxDim) {
+    const scale = Math.min(maxDim / width, maxDim / height)
+    width = Math.round(width * scale)
+    height = Math.round(height * scale)
+  }
+  const canvas = document.createElement("canvas")
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new Error("canvas 2d context unavailable")
+  ctx.drawImage(img, 0, 0, width, height)
+  const out = canvas.toDataURL("image/jpeg", 0.85)
+  const comma = out.indexOf(",")
+  return {
+    media_type: "image/jpeg",
+    data: comma >= 0 ? out.slice(comma + 1) : out,
+    filename: file.name,
+  }
+}
+
+// Validates + converts a File to a ChatImage. Returns null + emits
+// a toast reason if the file should be skipped.
+async function fileToChatImage(
+  file: File,
+  onSkip: (reason: string) => void,
+): Promise<ChatImage | null> {
+  if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+    onSkip(`${file.name || "File"}: unsupported type (PNG, JPEG, GIF, WebP only)`)
+    return null
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    onSkip(`${file.name || "Image"} is over 10MB`)
+    return null
+  }
+  if (file.size > COMPRESS_THRESHOLD_BYTES) {
+    return compressImage(file)
+  }
+  const data = await readFileAsBase64(file)
+  return {
+    media_type: file.type as ChatImage["media_type"],
+    data,
+    filename: file.name,
+  }
+}
+
+function imageToDataUrl(img: ChatImage): string {
+  return `data:${img.media_type};base64,${img.data}`
+}
+
 function formatRelativeTime(d: Date | undefined): string {
   if (!d || Number.isNaN(d.getTime())) return "earlier"
   // Go zero time serializes as 0001-01-01T00:00:00Z → year 1.
@@ -445,6 +543,17 @@ function chatMessagesToUi(messages: main.ChatMessage[] | undefined | null): Mess
         timestamp = parsed
       }
     }
+    const rawImages = (row as unknown as { images?: ChatImage[] }).images
+    const images =
+      Array.isArray(rawImages) && rawImages.length > 0
+        ? rawImages
+            .filter((img) => img && typeof img.data === "string" && typeof img.media_type === "string")
+            .map((img) => ({
+              media_type: img.media_type as ChatImage["media_type"],
+              data: img.data,
+              filename: img.filename,
+            }))
+        : undefined
     return {
       id: `persisted-${index}-${row.role}`,
       role: row.role as "user" | "assistant",
@@ -457,6 +566,7 @@ function chatMessagesToUi(messages: main.ChatMessage[] | undefined | null): Mess
         row.role === "assistant" && row.tsx_generated ? "Click the preview to interact." : undefined,
       deliverable,
       timestamp,
+      images,
     }
   })
 }
@@ -472,6 +582,9 @@ function uiMessagesToChatPayload(messages: Message[]): main.ChatMessage[] {
       }
       if (m.timestamp) {
         payload.created_at = m.timestamp.toISOString()
+      }
+      if (m.images && m.images.length > 0) {
+        payload.images = m.images
       }
       return new main.ChatMessage(payload)
     })
@@ -805,6 +918,11 @@ export default function App() {
   const [previewStatus, setPreviewStatus] = useState("")
   const [rightPanelView, setRightPanelView] = useState<"preview" | "prd">("preview")
   const [currentPRD, setCurrentPRD] = useState("")
+  const [attachedImages, setAttachedImages] = useState<ChatImage[]>([])
+  const [openImage, setOpenImage] = useState<ChatImage | null>(null)
+  const [isDraggingImage, setIsDraggingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragCounterRef = useRef(0)
   const [selectedVersionIndex, setSelectedVersionIndex] = useState<number | null>(null)
   const [versionMenuOpen, setVersionMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(false)
@@ -1053,6 +1171,15 @@ export default function App() {
   }, [versionMenuOpen])
 
   useEffect(() => {
+    if (!openImage) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setOpenImage(null)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [openImage])
+
+  useEffect(() => {
     return () => {
       if (toastTimeoutRef.current !== null) {
         window.clearTimeout(toastTimeoutRef.current)
@@ -1101,8 +1228,13 @@ export default function App() {
   )
 
   const canSend = useMemo(() => {
-    return Boolean(apiKey) && !isStreaming && inputText.trim().length > 0 && Boolean(activeSessionId)
-  }, [apiKey, inputText, isStreaming, activeSessionId])
+    return (
+      Boolean(apiKey) &&
+      !isStreaming &&
+      (inputText.trim().length > 0 || attachedImages.length > 0) &&
+      Boolean(activeSessionId)
+    )
+  }, [apiKey, inputText, isStreaming, activeSessionId, attachedImages.length])
 
   const sessionHasPreview = messages.some(
     (m) => m.role === "assistant" && m.tsxGenerated === true,
@@ -1283,12 +1415,112 @@ export default function App() {
     }
   }
 
+  const addImagesFromFiles = useCallback(
+    async (files: FileList | File[] | null) => {
+      if (!files || isStreaming) return
+      const list = Array.from(files)
+      if (list.length === 0) return
+      const remainingSlots = MAX_IMAGES_PER_MESSAGE - attachedImages.length
+      if (remainingSlots <= 0) {
+        showToast(`Max ${MAX_IMAGES_PER_MESSAGE} images per message`)
+        return
+      }
+      const truncated = list.slice(0, remainingSlots)
+      if (list.length > remainingSlots) {
+        showToast(`Max ${MAX_IMAGES_PER_MESSAGE} images per message — extra files skipped`)
+      }
+      const out: ChatImage[] = []
+      for (const file of truncated) {
+        try {
+          const img = await fileToChatImage(file, showToast)
+          if (img) out.push(img)
+        } catch (err) {
+          console.error("image read error:", err)
+          showToast(`Failed to read ${file.name || "image"}`)
+        }
+      }
+      if (out.length > 0) {
+        setAttachedImages((prev) => [...prev, ...out].slice(0, MAX_IMAGES_PER_MESSAGE))
+      }
+    },
+    [attachedImages.length, isStreaming, showToast],
+  )
+
+  const removeAttachedImage = (idx: number) => {
+    setAttachedImages((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const handlePasteImages = useCallback(
+    (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      if (isStreaming) return
+      const items = event.clipboardData?.items
+      if (!items || items.length === 0) return
+      const files: File[] = []
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i]
+        if (it.kind === "file" && it.type.startsWith("image/")) {
+          const f = it.getAsFile()
+          if (f) files.push(f)
+        }
+      }
+      if (files.length > 0) {
+        event.preventDefault()
+        void addImagesFromFiles(files)
+      }
+    },
+    [addImagesFromFiles, isStreaming],
+  )
+
+  const handleDragEnter = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (isStreaming) return
+      if (!Array.from(event.dataTransfer.types || []).includes("Files")) return
+      event.preventDefault()
+      dragCounterRef.current += 1
+      setIsDraggingImage(true)
+    },
+    [isStreaming],
+  )
+
+  const handleDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (isStreaming) return
+      if (!Array.from(event.dataTransfer.types || []).includes("Files")) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = "copy"
+    },
+    [isStreaming],
+  )
+
+  const handleDragLeave = useCallback(
+    (_event: DragEvent<HTMLDivElement>) => {
+      dragCounterRef.current = Math.max(0, dragCounterRef.current - 1)
+      if (dragCounterRef.current === 0) setIsDraggingImage(false)
+    },
+    [],
+  )
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      dragCounterRef.current = 0
+      setIsDraggingImage(false)
+      if (isStreaming) return
+      const files = event.dataTransfer?.files
+      if (!files || files.length === 0) return
+      event.preventDefault()
+      void addImagesFromFiles(files)
+    },
+    [addImagesFromFiles, isStreaming],
+  )
+
   const submitMessage = async () => {
     if (!apiKey || !canSend || !activeSessionId) {
       return
     }
 
     const userContent = inputText.trim()
+    const sendImages = attachedImages
+    if (userContent.length === 0 && sendImages.length === 0) return
     const now = new Date()
 
     // Auto-fork-on-edit: if user is viewing an older version, drop
@@ -1306,6 +1538,7 @@ export default function App() {
       role: "user",
       content: userContent,
       timestamp: now,
+      images: sendImages.length > 0 ? sendImages : undefined,
     }
     const assistantPlaceholder: Message = {
       id: `msg-${nextIdRef.current++}`,
@@ -1316,9 +1549,36 @@ export default function App() {
       timestamp: now,
     }
 
+    // Build multimodal content for the current user turn (and replay
+    // any prior user message's images so visual context survives across
+    // turns). Assistant messages stay text-only.
+    const buildUserContent = (
+      text: string,
+      images: ChatImage[] | undefined,
+    ): string | Array<ClaudeContentBlock> => {
+      if (!images || images.length === 0) return text
+      const blocks: ClaudeContentBlock[] = images.map((img) => ({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: img.media_type,
+          data: img.data,
+        },
+      }))
+      if (text.length > 0) {
+        blocks.push({ type: "text", text })
+      }
+      return blocks
+    }
+
     const contextMessages: ClaudeMessage[] = [
       ...baseMessages
-        .filter((msg) => !msg.isError && msg.content.trim().length > 0 && !msg.isGenerating)
+        .filter(
+          (msg) =>
+            !msg.isError &&
+            !msg.isGenerating &&
+            (msg.content.trim().length > 0 || (msg.role === "user" && (msg.images?.length ?? 0) > 0)),
+        )
         .map((msg) => {
           if (msg.role === "assistant" && msg.tsxGenerated) {
             return {
@@ -1326,15 +1586,22 @@ export default function App() {
               content: msg.content || "Preview updated.",
             }
           }
+          if (msg.role === "user") {
+            return {
+              role: "user" as const,
+              content: buildUserContent(msg.content, msg.images),
+            }
+          }
           return { role: msg.role, content: msg.content }
         }),
-      { role: "user", content: userContent },
+      { role: "user", content: buildUserContent(userContent, sendImages) },
     ]
 
     setMessages([...baseMessages, userMessage, assistantPlaceholder])
     setSelectedVersionIndex(null)
     setVersionMenuOpen(false)
     setInputText("")
+    setAttachedImages([])
     setIsStreaming(true)
     streamingTextRef.current = ""
     planParsedRef.current = false
@@ -1891,18 +2158,59 @@ export default function App() {
                   {messages.map((message) => {
                     const display = assistantDisplayContent(message)
                     if (message.role === "user") {
+                      const userImages = message.images ?? []
+                      const hasText = message.content.length > 0
                       return (
                         <div key={message.id} className="flex justify-end">
-                          <div
-                            className="max-w-[80%] rounded-[12px] px-[14px] py-[10px] text-[13px]"
-                            style={{
-                              backgroundColor: "#F5F5F5",
-                              color: "#1A1A1A",
-                              lineHeight: 1.5,
-                              whiteSpace: "pre-wrap",
-                            }}
-                          >
-                            {message.content}
+                          <div className="flex max-w-[80%] flex-col items-end gap-1.5">
+                            {userImages.length > 0 ? (
+                              <div className="flex flex-wrap justify-end gap-1.5">
+                                {userImages.map((img, i) => (
+                                  <button
+                                    key={`${message.id}-img-${i}`}
+                                    type="button"
+                                    onClick={() => setOpenImage(img)}
+                                    aria-label={img.filename || "View image"}
+                                    style={{
+                                      padding: 0,
+                                      border: "1px solid #E5E5E5",
+                                      borderRadius: 8,
+                                      backgroundColor: "#FFFFFF",
+                                      cursor: "pointer",
+                                      overflow: "hidden",
+                                      maxWidth: 120,
+                                      display: "inline-block",
+                                    }}
+                                  >
+                                    <img
+                                      src={imageToDataUrl(img)}
+                                      alt={img.filename || "attached image"}
+                                      style={{
+                                        display: "block",
+                                        maxWidth: 120,
+                                        maxHeight: 120,
+                                        width: "auto",
+                                        height: "auto",
+                                        objectFit: "contain",
+                                      }}
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                            {hasText ? (
+                              <div
+                                className="rounded-[12px] px-[14px] py-[10px] text-[13px]"
+                                style={{
+                                  backgroundColor: "#F5F5F5",
+                                  color: "#1A1A1A",
+                                  lineHeight: 1.5,
+                                  whiteSpace: "pre-wrap",
+                                }}
+                              >
+                                {message.content}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       )
@@ -2032,7 +2340,39 @@ export default function App() {
               )}
             </div>
 
-            <div className="border-t px-6 py-3" style={{ borderColor: "#EEEEEE" }}>
+            <div
+              className="border-t px-6 py-3"
+              style={{
+                borderColor: "#EEEEEE",
+                position: "relative",
+              }}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {isDraggingImage && !isStreaming ? (
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 8,
+                    borderRadius: 8,
+                    border: "2px dashed #16A34A",
+                    backgroundColor: "rgba(22, 163, 74, 0.06)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: "#16A34A",
+                    pointerEvents: "none",
+                    zIndex: 5,
+                  }}
+                >
+                  Drop image to attach
+                </div>
+              ) : null}
               <div className="flex flex-col gap-2">
                 {isViewingOlder && selectedVersionIndex !== null ? (
                   <div
@@ -2044,15 +2384,65 @@ export default function App() {
                       border: "1px solid #EEEEEE",
                       borderRadius: 6,
                       padding: "8px 10px",
-                                  }}
+                    }}
                   >
                     {`Typing will fork from V${selectedVersionIndex + 1} — V${versions.length} will be lost. Use "Fork from here" to preserve.`}
+                  </div>
+                ) : null}
+                {attachedImages.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {attachedImages.map((img, i) => (
+                      <div
+                        key={`${img.filename ?? "img"}-${i}`}
+                        style={{
+                          position: "relative",
+                          width: 56,
+                          height: 56,
+                          borderRadius: 6,
+                          border: "1px solid #DDDDDD",
+                          backgroundColor: "#FFFFFF",
+                          overflow: "hidden",
+                        }}
+                        title={img.filename || "Attached image"}
+                      >
+                        <img
+                          src={imageToDataUrl(img)}
+                          alt={img.filename || "attachment"}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeAttachedImage(i)}
+                          disabled={isStreaming}
+                          aria-label="Remove image"
+                          style={{
+                            position: "absolute",
+                            top: 2,
+                            right: 2,
+                            width: 18,
+                            height: 18,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "none",
+                            borderRadius: "50%",
+                            backgroundColor: "rgba(0,0,0,0.55)",
+                            color: "#FFFFFF",
+                            cursor: isStreaming ? "not-allowed" : "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          <XIcon size={11} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
                 <Textarea
                   value={inputText}
                   onChange={(event) => setInputText(event.target.value)}
                   onKeyDown={handleInputKeyDown}
+                  onPaste={handlePasteImages}
                   placeholder="Describe what you want to build..."
                   disabled={isStreaming}
                   className="min-h-[64px] w-full resize-none border text-[14px] placeholder:text-[14px] shadow-none focus-visible:ring-0"
@@ -2063,15 +2453,49 @@ export default function App() {
                     backgroundColor: "#FFFFFF",
                   }}
                 />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const files = e.target.files
+                    void addImagesFromFiles(files)
+                    if (e.target) e.target.value = ""
+                  }}
+                />
                 <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => void handleResetKey()}
-                    className="m-0 border-0 bg-transparent p-0 text-[12px] font-normal hover:underline"
-                    style={{ color: "#999999" }}
-                  >
-                    Reset key
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isStreaming) return
+                        fileInputRef.current?.click()
+                      }}
+                      disabled={isStreaming || attachedImages.length >= MAX_IMAGES_PER_MESSAGE}
+                      title={
+                        isStreaming
+                          ? "Wait for the current generation to finish"
+                          : attachedImages.length >= MAX_IMAGES_PER_MESSAGE
+                            ? `Max ${MAX_IMAGES_PER_MESSAGE} images per message`
+                            : "Attach image (PNG, JPEG, GIF, WebP — max 10MB)"
+                      }
+                      aria-label="Attach image"
+                      className="m-0 border-0 bg-transparent p-0 hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
+                      style={{ color: "#666666", cursor: "pointer", display: "inline-flex", alignItems: "center" }}
+                    >
+                      <Paperclip size={14} strokeWidth={1.75} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleResetKey()}
+                      className="m-0 border-0 bg-transparent p-0 text-[12px] font-normal hover:underline"
+                      style={{ color: "#999999" }}
+                    >
+                      Reset key
+                    </button>
+                  </div>
 
                   <button
                     type="button"
@@ -2384,6 +2808,50 @@ export default function App() {
       >
         {toast ?? ""}
       </div>
+
+      {openImage ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.7)", padding: 40 }}
+          onClick={() => setOpenImage(null)}
+          role="presentation"
+        >
+          <button
+            type="button"
+            onClick={() => setOpenImage(null)}
+            aria-label="Close image"
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              border: "none",
+              backgroundColor: "rgba(255,255,255,0.9)",
+              color: "#1A1A1A",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <XIcon size={16} strokeWidth={2} />
+          </button>
+          <img
+            src={imageToDataUrl(openImage)}
+            alt={openImage.filename || "image"}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+              borderRadius: 8,
+              backgroundColor: "#FFFFFF",
+            }}
+          />
+        </div>
+      ) : null}
 
       {deleteConfirmId ? (
         <div
