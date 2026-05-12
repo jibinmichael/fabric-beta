@@ -505,7 +505,6 @@ function ThinkingIndicator() {
         color: "#666666",
         fontSize: 14,
         lineHeight: 1.6,
-        fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
       }}
     >
       <span>Thinking</span>
@@ -538,7 +537,6 @@ function PlanIndicator({ items }: { items: PlanItem[] }) {
     <div
       className="flex flex-col gap-1.5"
       style={{
-        fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
         fontSize: 13,
         lineHeight: 1.5,
       }}
@@ -624,8 +622,6 @@ function PersonaCardRow({
           backgroundColor: expanded ? "#FAFAFA" : "#FFFFFF",
           borderBottom: expanded ? "1px solid #EEEEEE" : "none",
           transition: "background-color 150ms ease",
-          fontFamily:
-            "Avenir Next, Avenir, system-ui, sans-serif",
         }}
       >
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -720,18 +716,14 @@ function DeliverableView({ deliverable }: { deliverable: DeliverableSummary }) {
   }
 
   return (
-    <div
-      className="mt-3 flex flex-col gap-2.5"
-      style={{ fontFamily: "Avenir Next, Avenir, system-ui, sans-serif" }}
-    >
+    <div className="mt-3 flex flex-col gap-2.5">
       <div
         className="flex items-baseline gap-1.5"
         style={{
           fontSize: 12,
           fontWeight: 500,
           color: "#16A34A",
-          fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-        }}
+          }}
       >
         <span
           aria-hidden
@@ -1597,7 +1589,7 @@ export default function App() {
     }
   }
 
-  const sidebarFont = { fontFamily: "Avenir Next, Avenir, system-ui, sans-serif" } as const
+  const sidebarFont = {} as const
 
   return (
     <div className="flex h-full w-full bg-white">
@@ -1936,8 +1928,7 @@ export default function App() {
                                 color: "#666666",
                                 fontSize: 14,
                                 lineHeight: 1.6,
-                                fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-                              }}
+                                                      }}
                             >
                               <span>Generating</span>
                               <span className="inline-flex" aria-hidden style={{ letterSpacing: "0.02em" }}>
@@ -2026,8 +2017,7 @@ export default function App() {
                                 fontWeight: 400,
                                 color: "#666666",
                                 lineHeight: 1.4,
-                                fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-                              }}
+                                                      }}
                             >
                               <div>{line1}</div>
                               {line2 ? <div>{line2}</div> : null}
@@ -2053,8 +2043,7 @@ export default function App() {
                       border: "1px solid #EEEEEE",
                       borderRadius: 6,
                       padding: "8px 10px",
-                      fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-                    }}
+                                  }}
                   >
                     {`Typing will fork from V${selectedVersionIndex + 1} — V${versions.length} will be lost. Use "Fork from here" to preserve.`}
                   </div>
@@ -2111,7 +2100,7 @@ export default function App() {
         {versions.length > 1 ? (
           <div
             className="flex shrink-0 items-center justify-end border-b px-3 py-2"
-            style={{ borderColor: "#EEEEEE", fontFamily: "Avenir Next, Avenir, system-ui, sans-serif" }}
+            style={{ borderColor: "#EEEEEE" }}
           >
             <div className="relative">
               <button
@@ -2230,8 +2219,7 @@ export default function App() {
                   padding: "6px 16px",
                   fontSize: 12,
                   fontWeight: 500,
-                  fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-                  transition: "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
+                            transition: "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
                   ...(rightPanelView === "preview"
                     ? {
                         backgroundColor: "#FFFFFF",
@@ -2265,8 +2253,7 @@ export default function App() {
                   padding: "6px 16px",
                   fontSize: 12,
                   fontWeight: 500,
-                  fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-                  transition: "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
+                            transition: "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
                   ...(rightPanelView === "prd"
                     ? {
                         backgroundColor: "#FFFFFF",
@@ -2310,8 +2297,7 @@ export default function App() {
                 className="flex h-full items-center justify-center px-8 text-center text-[14px] font-normal"
                 style={{
                   color: "#999999",
-                  fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-                }}
+                          }}
               >
                 {sessionHasPreview
                   ? formatPreviewStatus(previewStatus)
@@ -2330,8 +2316,7 @@ export default function App() {
               className="flex h-full items-center justify-center px-8 text-center text-[14px]"
               style={{
                 color: "#999999",
-                fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-              }}
+                      }}
             >
               Generate a preview first — the PRD will appear here.
             </div>
@@ -2388,8 +2373,7 @@ export default function App() {
           color: "#FFFFFF",
           padding: "10px 16px",
           borderRadius: 8,
-          fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
-          fontSize: 13,
+            fontSize: 13,
           fontWeight: 500,
           opacity: toast ? 1 : 0,
           transform: toast ? "translateY(0)" : "translateY(8px)",
@@ -2409,7 +2393,6 @@ export default function App() {
         >
           <div
             className="max-w-[360px] rounded-lg bg-white p-6 shadow-lg"
-            style={{ fontFamily: "Avenir Next, Avenir, system-ui, sans-serif" }}
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-[16px] font-medium text-[#1A1A1A]">Delete this session?</h3>

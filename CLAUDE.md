@@ -127,6 +127,7 @@ Cost copy format (verified working):
 - **Toasts:** Use `showToast()` for silent failures (e.g. session-switch rejections).
 - **No `localStorage`/`sessionStorage` for app state** — desktop app uses Wails file storage via Go backend.
 - **App-level UI state lives in `state.json`** (Go `appState` struct, alongside `ActiveSessionID`). Examples: `SidebarCollapsed`. Add new fields with `omitempty`. `persistAppState(activeID)` reads the existing state and only mutates the active session id, so sibling fields are preserved across session changes. Per-chat UI state (selectedVersionIndex etc.) is **transient** — never persisted. **Sidebar collapse is app-level, not per-chat** — do not tie it to session state, do not reset on session switch.
+- **All typography uses the canonical system-ui font stack.** No webfonts. No `font-family` declarations in generated code — the preview iframe injects font CSS at `<head>` level (`build/preview-server-template/index.html` `<style>` block + `src/index.css` `:root`) so generated code inherits automatically. Fabric chrome (`frontend/src/index.css`, Tailwind `fontFamily.sans` override) uses the same stack: `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` + `font-feature-settings: "cv02", "cv03", "cv04", "cv11"` for SF Pro stylistic alternates on Mac. Monospace is preserved only for `<code>`/`<pre>` blocks.
 - **Iteration history — auto-fork-on-edit semantics:** A "version" is any assistant message in `messages[]` with `tsxGenerated === true`. Selecting an older version via the preview-pane dropdown is **transient view state only** (`selectedVersionIndex` resets on session switch and on stream completion). If a user types a new prompt while viewing an older version, `messages[]` is **truncated** after that version's index before the new turn appends — later versions are discarded. The "Fork from here" action in the dropdown is the preservation path: it creates a new chat containing `messages[0..versionIndex]` and switches the user to it; the original chat is untouched. Preview swap on version select calls `WriteGeneratedCode(tsx)` (live file only, does NOT touch `cached_preview.tsx`), so on session reload the latest version is correctly restored. Future sessions: do not redesign this; the auto-fork default is intentional.
 
 ---
@@ -140,7 +141,7 @@ Cost copy format (verified working):
 - ❌ Change Harmony component default heights (32/40/48 Button, 44/36 Input, 64px Dialog padding)
 - ❌ Edit `designTokens.css` token values directly — that's Figma's job
 - ❌ Generate page layouts wider than 1200px content area (Wati admin is fixed-width)
-- ❌ Use `Inter` weights below 400 or above 700 (system supports 100–900 but design uses 400/500/600/700)
+- ❌ Import webfonts (no Inter, no Google Fonts, no `@font-face`) — typography is system-ui only across Fabric chrome AND generated previews
 - ❌ Bundle real chart libraries (Recharts, Chart.js) in generated output — use `ChartSlot`
 
 ---

@@ -21,9 +21,15 @@ These rules apply to UI Fabric generates (the preview pane). They do
 NOT apply to Fabric's own chrome.
 
 **Font**
-- Primary: Inter, with system-ui sans-serif fallback.
-- Tailwind: use `font-sans` (Inter-configured) — never `font-serif`.
-- NEVER serif. NEVER display or decorative fonts. NEVER monospace 
+- Use the system UI font stack only. Do NOT specify `font-family` in
+  component styles — the preview iframe injects the canonical stack at
+  `<head>` level so generated code inherits automatically.
+- If you must specify, use exactly:
+  `system-ui, -apple-system, sans-serif`
+- Tailwind: `font-sans` resolves to the canonical system stack. Use it
+  if needed; never `font-serif`.
+- NEVER import a webfont (no Inter, no Google Fonts, no `@font-face`).
+- NEVER serif. NEVER display or decorative fonts. NEVER monospace
   except for code blocks or tabular numeric data.
 
 **Roundness — generated UI is rounded, never boxy**
