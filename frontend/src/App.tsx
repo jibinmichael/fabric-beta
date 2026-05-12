@@ -21,9 +21,10 @@ import {
   SaveMessages,
   SaveSessionPRD,
   SaveSessionPreview,
+  WriteGeneratedCode,
 } from "../wailsjs/go/main/App"
 import { EventsOn } from "../wailsjs/runtime/runtime"
-import { MoreHorizontal, ChevronRight, FileText, CheckCircle, Wrench } from "lucide-react"
+import { MoreHorizontal, ChevronRight, ChevronDown, FileText, CheckCircle, Wrench } from "lucide-react"
 import { streamChat, type ClaudeMessage } from "@/lib/claude"
 import { buildSystemPrompt } from "@/lib/systemPrompt"
 import type { Usage } from "@anthropic-ai/sdk/resources/messages"
@@ -89,6 +90,7 @@ type Message = {
   planItems?: PlanItem[]
   deliverable?: DeliverableSummary
   usage?: Usage
+  timestamp?: Date
 }
 
 type SessionMetaView = {
@@ -361,6 +363,62 @@ function formatSessionTimestamp(d: Date): string {
   }).format(d)
 }
 
+// "2 minutes ago" / "yesterday" / "May 8" style relative formatter.
+// Returns "earlier" when timestamp is missing or the Go zero time.
+function formatRelativeTime(d: Date | undefined): string {
+  if (!d || Number.isNaN(d.getTime())) return "earlier"
+  // Go zero time serializes as 0001-01-01T00:00:00Z → year 1.
+  if (d.getFullYear() < 2000) return "earlier"
+  const now = Date.now()
+  const diffSec = Math.max(0, Math.round((now - d.getTime()) / 1000))
+  if (diffSec < 10) return "just now"
+  if (diffSec < 60) return `${diffSec}s ago`
+  const diffMin = Math.round(diffSec / 60)
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`
+  const diffHr = Math.round(diffMin / 60)
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`
+  const diffDay = Math.round(diffHr / 24)
+  if (diffDay === 1) return "yesterday"
+  if (diffDay < 7) return `${diffDay} days ago`
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(d)
+}
+
+function truncatePrompt(text: string, max: number): string {
+  const cleaned = text.trim().replace(/\s+/g, " ")
+  if (cleaned.length <= max) return cleaned
+  return cleaned.slice(0, max - 1).trimEnd() + "…"
+}
+
+// A "version" is an assistant message that produced an artifact (TSX).
+// Returns {msgIndex, tsx, prompt, timestamp} in chronological order.
+type Version = {
+  msgIndex: number
+  tsx: string
+  prompt: string
+  timestamp?: Date
+}
+
+function computeVersions(messages: Message[]): Version[] {
+  const out: Version[] = []
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i]
+    if (m.role !== "assistant" || !m.tsxGenerated || m.isGenerating) continue
+    const parsed = extractPreviewAndPrd(m.content)
+    const tsx = parsed.tsx ?? extractTsxFallbacks(m.content)
+    if (!tsx) continue
+    // Walk back to the most recent user message to get the prompt.
+    let prompt = ""
+    for (let j = i - 1; j >= 0; j--) {
+      if (messages[j].role === "user") {
+        prompt = messages[j].content
+        break
+      }
+    }
+    out.push({ msgIndex: i, tsx, prompt, timestamp: m.timestamp })
+  }
+  return out
+}
+
 function chatMessagesToUi(messages: main.ChatMessage[] | undefined | null): Message[] {
   if (!messages?.length) {
     return []
@@ -377,6 +435,14 @@ function chatMessagesToUi(messages: main.ChatMessage[] | undefined | null): Mess
         }
       }
     }
+    const rawCreatedAt = (row as unknown as { created_at?: string }).created_at
+    let timestamp: Date | undefined
+    if (rawCreatedAt) {
+      const parsed = new Date(rawCreatedAt)
+      if (!Number.isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000) {
+        timestamp = parsed
+      }
+    }
     return {
       id: `persisted-${index}-${row.role}`,
       role: row.role as "user" | "assistant",
@@ -388,6 +454,7 @@ function chatMessagesToUi(messages: main.ChatMessage[] | undefined | null): Mess
       statusSubtext:
         row.role === "assistant" && row.tsx_generated ? "Click the preview to interact." : undefined,
       deliverable,
+      timestamp,
     }
   })
 }
@@ -396,12 +463,15 @@ function uiMessagesToChatPayload(messages: Message[]): main.ChatMessage[] {
   return messages
     .filter((m) => !m.isGenerating)
     .map((m) => {
-      const cm = new main.ChatMessage({
+      const payload: Record<string, unknown> = {
         role: m.role,
         content: m.content,
         tsx_generated: Boolean(m.role === "assistant" && m.tsxGenerated),
-      })
-      return cm
+      }
+      if (m.timestamp) {
+        payload.created_at = m.timestamp.toISOString()
+      }
+      return new main.ChatMessage(payload)
     })
 }
 
@@ -741,6 +811,8 @@ export default function App() {
   const [previewStatus, setPreviewStatus] = useState("")
   const [rightPanelView, setRightPanelView] = useState<"preview" | "prd">("preview")
   const [currentPRD, setCurrentPRD] = useState("")
+  const [selectedVersionIndex, setSelectedVersionIndex] = useState<number | null>(null)
+  const [versionMenuOpen, setVersionMenuOpen] = useState(false)
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -801,6 +873,8 @@ export default function App() {
     setMessages(ui)
     nextIdRef.current = ui.length + 1
     setCurrentPRD(data.prd ?? "")
+    setSelectedVersionIndex(null)
+    setVersionMenuOpen(false)
   }, [])
 
   useEffect(() => {
@@ -949,6 +1023,23 @@ export default function App() {
   }, [contextMenu])
 
   useEffect(() => {
+    if (!versionMenuOpen) return
+    const close = () => setVersionMenuOpen(false)
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setVersionMenuOpen(false)
+    }
+    // Defer the click listener by a tick so the click that opened the menu
+    // doesn't immediately close it.
+    const t = window.setTimeout(() => window.addEventListener("click", close), 0)
+    window.addEventListener("keydown", onKey)
+    return () => {
+      window.clearTimeout(t)
+      window.removeEventListener("click", close)
+      window.removeEventListener("keydown", onKey)
+    }
+  }, [versionMenuOpen])
+
+  useEffect(() => {
     return () => {
       if (toastTimeoutRef.current !== null) {
         window.clearTimeout(toastTimeoutRef.current)
@@ -1004,6 +1095,11 @@ export default function App() {
     (m) => m.role === "assistant" && m.tsxGenerated === true,
   )
 
+  const versions = useMemo(() => computeVersions(messages), [messages])
+  const currentVersionIdx = selectedVersionIndex ?? Math.max(0, versions.length - 1)
+  const isViewingOlder =
+    selectedVersionIndex !== null && selectedVersionIndex < versions.length - 1
+
   const handleSelectSession = async (id: string) => {
     if (isStreaming || id === activeSessionId) {
       if (isStreaming) {
@@ -1034,6 +1130,8 @@ export default function App() {
       setCurrentPRD("")
       nextIdRef.current = 0
       setRightPanelView("preview")
+      setSelectedVersionIndex(null)
+      setVersionMenuOpen(false)
       const data = await LoadSession(meta.id)
       applySessionData(data)
       await refreshSessionList(meta.id)
@@ -1120,17 +1218,81 @@ export default function App() {
     }
   }
 
+  const selectVersion = async (idx: number) => {
+    if (isStreaming) return
+    setVersionMenuOpen(false)
+    if (idx < 0 || idx >= versions.length) return
+    const isLatest = idx === versions.length - 1
+    setSelectedVersionIndex(isLatest ? null : idx)
+    try {
+      await WriteGeneratedCode(versions[idx].tsx)
+    } catch (err) {
+      console.error("WriteGeneratedCode:", err)
+      showToast("Failed to swap preview")
+    }
+  }
+
+  const forkFromVersion = async (idx: number) => {
+    if (isStreaming) return
+    if (idx < 0 || idx >= versions.length) return
+    setVersionMenuOpen(false)
+    const v = versions[idx]
+    const truncated = messages.slice(0, v.msgIndex + 1)
+    const versionNum = idx + 1
+    try {
+      const meta = await CreateSession()
+      // CreateSession resets shared preview to placeholder. Restore our forked artifact.
+      const persistedPayload = uiMessagesToChatPayload(truncated)
+      await SaveMessages(meta.id, persistedPayload)
+      // Pull prd out of the forked version's content if present.
+      const parsed = extractPreviewAndPrd(messages[v.msgIndex].content)
+      if (parsed.prd) {
+        try {
+          await SaveSessionPRD(meta.id, parsed.prd)
+        } catch (err) {
+          console.error("SaveSessionPRD (fork):", err)
+        }
+      }
+      try {
+        await SaveSessionPreview(meta.id, v.tsx)
+      } catch (err) {
+        console.error("SaveSessionPreview (fork):", err)
+      }
+      const data = await LoadSession(meta.id)
+      applySessionData(data)
+      setRightPanelView("preview")
+      await refreshSessionList(meta.id)
+      showToast(`Forked from V${versionNum} — new chat created`)
+    } catch (err) {
+      console.error("forkFromVersion:", err)
+      const msg = err instanceof Error ? err.message : "Fork failed"
+      showToast(msg)
+    }
+  }
+
   const submitMessage = async () => {
     if (!apiKey || !canSend || !activeSessionId) {
       return
     }
 
     const userContent = inputText.trim()
+    const now = new Date()
+
+    // Auto-fork-on-edit: if user is viewing an older version, drop
+    // everything after the selected version's assistant message
+    // before appending the new turn.
+    const truncateAtMsgIdx =
+      selectedVersionIndex !== null && selectedVersionIndex < versions.length - 1
+        ? versions[selectedVersionIndex].msgIndex
+        : -1
+    const baseMessages =
+      truncateAtMsgIdx >= 0 ? messages.slice(0, truncateAtMsgIdx + 1) : messages
 
     const userMessage: Message = {
       id: `msg-${nextIdRef.current++}`,
       role: "user",
       content: userContent,
+      timestamp: now,
     }
     const assistantPlaceholder: Message = {
       id: `msg-${nextIdRef.current++}`,
@@ -1138,10 +1300,11 @@ export default function App() {
       content: "Generating preview...",
       isStatus: true,
       isGenerating: true,
+      timestamp: now,
     }
 
     const contextMessages: ClaudeMessage[] = [
-      ...messages
+      ...baseMessages
         .filter((msg) => !msg.isError && msg.content.trim().length > 0 && !msg.isGenerating)
         .map((msg) => {
           if (msg.role === "assistant" && msg.tsxGenerated) {
@@ -1155,7 +1318,9 @@ export default function App() {
       { role: "user", content: userContent },
     ]
 
-    setMessages((prev) => [...prev, userMessage, assistantPlaceholder])
+    setMessages([...baseMessages, userMessage, assistantPlaceholder])
+    setSelectedVersionIndex(null)
+    setVersionMenuOpen(false)
     setInputText("")
     setIsStreaming(true)
     streamingTextRef.current = ""
@@ -1781,6 +1946,22 @@ export default function App() {
 
             <div className="border-t px-6 py-3" style={{ borderColor: "#EEEEEE" }}>
               <div className="flex flex-col gap-2">
+                {isViewingOlder && selectedVersionIndex !== null ? (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      color: "#666666",
+                      backgroundColor: "#FAFAFA",
+                      border: "1px solid #EEEEEE",
+                      borderRadius: 6,
+                      padding: "8px 10px",
+                      fontFamily: "Avenir Next, Avenir, system-ui, sans-serif",
+                    }}
+                  >
+                    {`Typing will fork from V${selectedVersionIndex + 1} — V${versions.length} will be lost. Use "Fork from here" to preserve.`}
+                  </div>
+                ) : null}
                 <Textarea
                   value={inputText}
                   onChange={(event) => setInputText(event.target.value)}
@@ -1830,6 +2011,107 @@ export default function App() {
           boxShadow: "-4px 0 18px rgba(0, 0, 0, 0.08)",
         }}
       >
+        {versions.length > 1 ? (
+          <div
+            className="flex shrink-0 items-center justify-end border-b px-3 py-2"
+            style={{ borderColor: "#EEEEEE", fontFamily: "Avenir Next, Avenir, system-ui, sans-serif" }}
+          >
+            <div className="relative">
+              <button
+                type="button"
+                disabled={isStreaming}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setVersionMenuOpen((v) => !v)
+                }}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border bg-white px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  borderColor: "#DDDDDD",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "#1A1A1A",
+                }}
+              >
+                <span>{`V${currentVersionIdx + 1} of ${versions.length}`}</span>
+                {isViewingOlder ? (
+                  <span style={{ color: "#999999", fontWeight: 400 }}>· older</span>
+                ) : null}
+                <ChevronDown size={12} strokeWidth={2} style={{ color: "#666666" }} />
+              </button>
+              {versionMenuOpen ? (
+                <div
+                  className="absolute right-0 z-50 mt-1 min-w-[280px] rounded-md border bg-white py-1"
+                  style={{
+                    borderColor: "#DDDDDD",
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+                    top: "100%",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {versions
+                    .map((v, i) => ({ v, i }))
+                    .reverse()
+                    .map(({ v, i }) => {
+                      const selected = i === currentVersionIdx
+                      const versionNum = i + 1
+                      return (
+                        <div
+                          key={v.msgIndex}
+                          className="group flex w-full cursor-pointer items-start gap-2 px-3 py-2 hover:bg-[#F5F5F5]"
+                          onClick={() => void selectVersion(i)}
+                        >
+                          <span
+                            style={{
+                              width: 12,
+                              display: "inline-block",
+                              fontSize: 11,
+                              color: "#16A34A",
+                              marginTop: 2,
+                            }}
+                          >
+                            {selected ? "✓" : ""}
+                          </span>
+                          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <div className="flex items-baseline gap-2" style={{ fontSize: 12 }}>
+                              <span style={{ fontWeight: 500, color: "#1A1A1A" }}>{`V${versionNum}`}</span>
+                              <span style={{ color: "#999999", fontSize: 11 }}>
+                                {formatRelativeTime(v.timestamp)}
+                              </span>
+                            </div>
+                            {v.prompt ? (
+                              <div
+                                className="line-clamp-2"
+                                style={{ fontSize: 11, color: "#666666", lineHeight: 1.4 }}
+                              >
+                                {truncatePrompt(v.prompt, 60)}
+                              </div>
+                            ) : null}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void forkFromVersion(i)
+                            }}
+                            className="shrink-0 rounded border-0 bg-transparent opacity-0 transition-opacity group-hover:opacity-100"
+                            style={{
+                              fontSize: 11,
+                              padding: "2px 8px",
+                              color: "#1A1A1A",
+                              border: "1px solid #DDDDDD",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Fork from here
+                          </button>
+                        </div>
+                      )
+                    })}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         {!MANUS_CARDS_MODE ? (
           <div
             className="flex shrink-0 justify-center border-b px-4 pt-3 pb-3"

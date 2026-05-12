@@ -15,6 +15,47 @@ Do not invent components, tokens, or patterns not specified here.
 - No gradients. No background imagery. No decorative illustrations.
 - Information density over breathing room — Wati is a power-user tool.
 
+## Visual style — MANDATORY for generated previews
+
+These rules apply to UI Fabric generates (the preview pane). They do 
+NOT apply to Fabric's own chrome.
+
+**Font**
+- Primary: Inter, with system-ui sans-serif fallback.
+- Tailwind: use `font-sans` (Inter-configured) — never `font-serif`.
+- NEVER serif. NEVER display or decorative fonts. NEVER monospace 
+  except for code blocks or tabular numeric data.
+
+**Roundness — generated UI is rounded, never boxy**
+- Cards: `rounded-lg` (8px) default; `rounded-xl` (12px) for page-level 
+  containers.
+- Buttons: `rounded-lg` (8px).
+- Inputs, selects, comboboxes: `rounded-lg` (8px).
+- Badges: `rounded-md` (6px) or `rounded-full` for pill style.
+- NEVER `rounded-none`. NEVER `rounded-sm` on primary surfaces.
+
+**Compactness — information density over breathing room**
+- Card padding: `p-4` (16px) default. `p-6` reserved for large hero 
+  cards only.
+- Button padding: `px-3 py-2` (sm), `px-4 py-2` (md), `px-5 py-2.5` (lg).
+- Input padding: `px-3 py-2`.
+- Vertical rhythm: `space-y-3` or `space-y-4` between sections — 
+  NEVER `space-y-6` or `space-y-8`.
+- Line-height: `leading-snug` or `leading-normal` — never `leading-loose`.
+
+**Color — single brand accent**
+- Neutral grays are the default for text, borders, surfaces.
+- The Wati primary green (`surface.primary` / WhatsApp green) is the 
+  ONLY accent color. Use sparingly:
+  - Primary CTA buttons (one per page max)
+  - The north-star metric (one card per analytics page)
+  - Success states (success badges, completed indicators)
+  - Occasional brand moments — never decorative
+- Semantic red allowed for error/danger states.
+- NEVER use purple, blue, orange, pink, teal, or any multi-color 
+  decorative palette in generated UI.
+- NEVER use color for decoration without semantic meaning.
+
 ## Component Vocabulary
 
 Use ONLY these components. Do not invent new components. Do not import 

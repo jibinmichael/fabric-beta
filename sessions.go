@@ -25,9 +25,10 @@ type SessionMeta struct {
 
 // ChatMessage is one row in chat.json.
 type ChatMessage struct {
-	Role         string `json:"role"`
-	Content      string `json:"content"`
-	TsxGenerated bool   `json:"tsx_generated,omitempty"`
+	Role         string    `json:"role"`
+	Content      string    `json:"content"`
+	TsxGenerated bool      `json:"tsx_generated,omitempty"`
+	CreatedAt    time.Time `json:"created_at,omitempty"`
 }
 
 type chatFile struct {
