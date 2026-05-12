@@ -503,8 +503,8 @@ function ThinkingIndicator() {
       className="inline-flex items-baseline gap-1"
       style={{
         color: "#666666",
-        fontSize: 14,
-        lineHeight: 1.6,
+        fontSize: 13,
+        lineHeight: 1.5,
       }}
     >
       <span>Thinking</span>
@@ -1742,6 +1742,7 @@ export default function App() {
                 }}
                 className="min-w-0 flex-1 cursor-pointer rounded-[4px] border-0 bg-transparent text-left transition-colors"
                 style={{ padding: "4px 4px 4px 4px" }}
+                title={`Last updated: ${formatRelativeTime(s.updatedAt)}`}
               >
                 {renamingSessionId === s.id ? (
                   <input
@@ -1782,7 +1783,7 @@ export default function App() {
                     >
                       {s.title}
                     </div>
-                    <div style={{ fontSize: 11, fontWeight: 400, color: "#999999", marginTop: 2 }}>
+                    <div style={{ fontSize: 11, fontWeight: 400, color: "#999999", marginTop: 2, display: "none" }}>
                       {formatSessionTimestamp(s.updatedAt)}
                     </div>
                   </>
@@ -1886,14 +1887,14 @@ export default function App() {
                   Ask anything
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   {messages.map((message) => {
                     const display = assistantDisplayContent(message)
                     if (message.role === "user") {
                       return (
                         <div key={message.id} className="flex justify-end">
                           <div
-                            className="max-w-[80%] rounded-[12px] px-[14px] py-[10px] text-[14px]"
+                            className="max-w-[80%] rounded-[12px] px-[14px] py-[10px] text-[13px]"
                             style={{
                               backgroundColor: "#F5F5F5",
                               color: "#1A1A1A",
@@ -1910,14 +1911,14 @@ export default function App() {
                     return (
                       <div
                         key={message.id}
-                        className="py-[10px] text-[14px] whitespace-pre-wrap"
+                        className="py-[10px] text-[13px] whitespace-pre-wrap"
                         style={{
                           color: message.isError
                             ? "#dc2626"
                             : message.isStatus || message.tsxGenerated
                               ? "#666666"
                               : "#1A1A1A",
-                          lineHeight: 1.6,
+                          lineHeight: 1.5,
                         }}
                       >
                         {message.isGenerating ? (
@@ -1926,9 +1927,9 @@ export default function App() {
                               className="inline-flex items-baseline gap-1"
                               style={{
                                 color: "#666666",
-                                fontSize: 14,
-                                lineHeight: 1.6,
-                                                      }}
+                                fontSize: 13,
+                                lineHeight: 1.5,
+                              }}
                             >
                               <span>Generating</span>
                               <span className="inline-flex" aria-hidden style={{ letterSpacing: "0.02em" }}>
