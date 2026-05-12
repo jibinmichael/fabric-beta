@@ -1617,27 +1617,71 @@ export default function App() {
       <aside
         className="flex h-full shrink-0 flex-col overflow-hidden border-r"
         style={{
-          width: sidebarCollapsed ? 60 : 240,
+          width: sidebarCollapsed ? 44 : 240,
           boxSizing: "border-box",
           backgroundColor: "#FAFAFA",
           borderColor: "#EEEEEE",
-          padding: 12,
-          transition: "width 200ms ease-out",
+          padding: sidebarCollapsed ? "8px 0" : 12,
+          transition: "width 200ms ease-out, padding 200ms ease-out",
           ...sidebarFont,
         }}
       >
+        {sidebarCollapsed ? (
+          <div className="flex flex-col" style={{ gap: 4 }}>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+              className="border-0 bg-transparent hover:bg-[#EEEEEE]"
+              style={{
+                width: 44,
+                height: 40,
+                color: "#666666",
+                cursor: "pointer",
+                transition: "background-color 150ms ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <PanelLeftOpen size={18} strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleNewSession()}
+              disabled={!sessionsReady || isStreaming}
+              title={isStreaming ? "Wait for the current generation to finish" : "New chat"}
+              aria-label="New chat"
+              className="border-0 bg-transparent hover:bg-[#EEEEEE] disabled:cursor-not-allowed disabled:opacity-50"
+              style={{
+                width: 44,
+                height: 40,
+                color: "#1A1A1A",
+                cursor: "pointer",
+                transition: "background-color 150ms ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Plus size={18} strokeWidth={1.75} />
+            </button>
+          </div>
+        ) : (
+          <>
         <div
           className="flex items-center"
           style={{
-            justifyContent: sidebarCollapsed ? "center" : "flex-end",
+            justifyContent: "flex-end",
             paddingBottom: 8,
           }}
         >
           <button
             type="button"
             onClick={toggleSidebar}
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
             className="rounded-md border-0 bg-transparent hover:bg-[#EEEEEE]"
             style={{
               padding: 6,
@@ -1649,62 +1693,30 @@ export default function App() {
               justifyContent: "center",
             }}
           >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen size={18} strokeWidth={1.75} />
-            ) : (
-              <PanelLeftClose size={18} strokeWidth={1.75} />
-            )}
+            <PanelLeftClose size={18} strokeWidth={1.75} />
           </button>
         </div>
         <div style={{ borderBottom: "1px solid #EEEEEE", paddingBottom: 12 }}>
-          {sidebarCollapsed ? (
-            <button
-              type="button"
-              onClick={() => void handleNewSession()}
-              disabled={!sessionsReady || isStreaming}
-              title={isStreaming ? "Wait for the current generation to finish" : "New chat"}
-              aria-label="New chat"
-              className="rounded-md border-0 bg-transparent hover:bg-[#EEEEEE] disabled:cursor-not-allowed disabled:opacity-50"
-              style={{
-                color: "#1A1A1A",
-                padding: 6,
-                cursor: "pointer",
-                transition: "background-color 150ms ease",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "100%",
-              }}
-            >
-              <Plus size={18} strokeWidth={1.75} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void handleNewSession()}
-              disabled={!sessionsReady || isStreaming}
-              title={isStreaming ? "Wait for the current generation to finish" : ""}
-              className="w-full rounded-[6px] border-0 font-medium transition-colors hover:bg-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50"
-              style={{
-                backgroundColor: "transparent",
-                color: "#1A1A1A",
-                padding: "8px 12px",
-                fontSize: 13,
-                fontWeight: 500,
-                textAlign: "left",
-              }}
-            >
-              + New chat
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => void handleNewSession()}
+            disabled={!sessionsReady || isStreaming}
+            title={isStreaming ? "Wait for the current generation to finish" : ""}
+            className="w-full rounded-[6px] border-0 font-medium transition-colors hover:bg-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              backgroundColor: "transparent",
+              color: "#1A1A1A",
+              padding: "8px 12px",
+              fontSize: 13,
+              fontWeight: 500,
+              textAlign: "left",
+            }}
+          >
+            + New chat
+          </button>
         </div>
         <div
           className="mt-3 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto"
-          style={{
-            opacity: sidebarCollapsed ? 0 : 1,
-            pointerEvents: sidebarCollapsed ? "none" : "auto",
-            transition: "opacity 150ms ease-out",
-          }}
         >
           {sessions.map((s) => (
             <div
@@ -1820,6 +1832,8 @@ export default function App() {
             </div>
           ))}
         </div>
+          </>
+        )}
       </aside>
 
       <section
