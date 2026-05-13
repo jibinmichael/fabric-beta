@@ -31,6 +31,7 @@ import { streamChat, type ClaudeContentBlock, type ClaudeMessage } from "@/lib/c
 import { buildSystemPrompt } from "@/lib/systemPrompt"
 import { computeQualityMetrics, type QualityMetrics } from "@/lib/qualityMetrics"
 import { QualityMetricsStrip } from "@/components/QualityMetricsStrip"
+import { setFeature, getFeatures } from "@/lib/features"
 import type { Usage } from "@anthropic-ai/sdk/resources/messages"
 import { main } from "../wailsjs/go/models"
 
@@ -961,6 +962,8 @@ export default function App() {
   const renameBlurSkipRef = useRef(false)
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const showToast = useCallback((message: string) => {
     if (toastTimeoutRef.current !== null) {
@@ -2547,14 +2550,82 @@ export default function App() {
                     >
                       <Paperclip size={14} strokeWidth={1.75} />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleResetKey()}
-                      className="m-0 border-0 bg-transparent p-0 text-[12px] font-normal hover:underline"
-                      style={{ color: "#999999" }}
-                    >
-                      Reset key
-                    </button>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setSettingsOpen((v) => !v)}
+                        aria-haspopup="menu"
+                        aria-expanded={settingsOpen}
+                        className="m-0 border-0 bg-transparent p-0 text-[12px] font-normal hover:underline"
+                        style={{ color: "#999999" }}
+                      >
+                        Settings
+                      </button>
+                      {settingsOpen ? (
+                        <div
+                          role="menu"
+                          style={{
+                            position: "absolute",
+                            bottom: "calc(100% + 6px)",
+                            left: 0,
+                            minWidth: 260,
+                            backgroundColor: "#FFFFFF",
+                            border: "1px solid #DDDDDD",
+                            borderRadius: 8,
+                            boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
+                            padding: 12,
+                            zIndex: 40,
+                            fontSize: 12,
+                            color: "#1A1A1A",
+                          }}
+                        >
+                          <label
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: 8,
+                              cursor: "pointer",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              defaultChecked={getFeatures().uiGeneration}
+                              onChange={(e) => {
+                                setFeature("uiGeneration", e.target.checked)
+                                showToast("Refresh the app to apply.")
+                              }}
+                              style={{ marginTop: 2 }}
+                            />
+                            <span>
+                              <span style={{ fontWeight: 500 }}>Experimental: UI generation</span>
+                              <span style={{ display: "block", color: "#999999", marginTop: 2 }}>
+                                Adds the right-side preview pane and TSX output. Refresh required.
+                              </span>
+                            </span>
+                          </label>
+                          <div
+                            style={{
+                              borderTop: "1px solid #EEEEEE",
+                              marginTop: 10,
+                              paddingTop: 10,
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSettingsOpen(false)
+                                void handleResetKey()
+                              }}
+                              className="m-0 border-0 bg-transparent p-0 text-[12px] font-normal hover:underline"
+                              style={{ color: "#666666", cursor: "pointer" }}
+                            >
+                              Reset API key
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
 
                   <button
