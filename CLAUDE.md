@@ -6,9 +6,11 @@
 
 ## What Fabric is
 
-Wails desktop app that generates Wati-grounded UI from natural-language prompts. Built for designers and PMs (non-developers). Chat interface paired with a live preview pane. Backed by Claude via the Anthropic SDK.
+Wails desktop app that generates Wati-grounded **PRDs, engineering specs, and QA acceptance criteria** from natural-language prompts. **Phase 1 default audience: product managers, engineers, QA.** Chat interface, single-column layout.
 
-**Strategic positioning:** Fabric is one consumer surface for the *rules layer* (markdown files defining Wati's design system constraints). Cursor and other AI coding tools can consume the same rules. The rules are the IP. Fabric is the delivery vehicle for non-developers.
+UI generation (live React TSX preview pane, persona cards, slot pattern) is **Phase 2** — gated behind `FEATURES.uiGeneration` in `lib/features.ts`, default off. Flip the flag in Settings → refresh to get the two-pane layout and TSX output.
+
+**Strategic positioning:** Fabric is one consumer surface for the *rules layer* (markdown files defining what Fabric generates). Cursor and other AI coding tools can consume the same rules. The rules are the IP. Fabric is the delivery vehicle.
 
 ---
 
@@ -31,14 +33,18 @@ Fabric/
 ├── wails.json                      # Wails config
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx                 # Main UI (chat + preview, pricing constants, fmtDollars)
+│   │   ├── App.tsx                 # Main UI (chat + optional preview, fmtDollars)
 │   │   ├── lib/
-│   │   │   ├── systemPrompt.ts     # Prompt assembly (rules injection at lines 511-521)
-│   │   │   └── chat.ts             # Streaming chat logic + usage capture
+│   │   │   ├── systemPrompt.ts     # Prompt assembly; branches on isUiGenerationEnabled()
+│   │   │   ├── features.ts         # localStorage-backed feature flags (uiGeneration)
+│   │   │   ├── claude.ts           # Anthropic streaming + usage capture
+│   │   │   └── qualityMetrics.ts   # Parallel Haiku 4.5 metrics (always on)
 │   │   ├── rules/
-│   │   │   ├── global.md           # Universal Wati rules
-│   │   │   └── archetypes/
-│   │   │       └── analytics.md    # Analytics page archetype
+│   │   │   ├── global.md           # Doc structure rules (always inject — Phase 1)
+│   │   │   └── ui-generation/      # Phase 2 — gated by FEATURES.uiGeneration
+│   │   │       ├── global-ui.md    # UI generation rules (aesthetic, slots, tokens, etc.)
+│   │   │       └── archetypes/
+│   │   │           └── analytics.md
 │   │   ├── components/             # Fabric's own UI components (NOT Wati's)
 │   │   └── types/                  # Shared TS types
 │   └── package.json
@@ -47,20 +53,38 @@ Fabric/
 
 ---
 
+## Architecture: feature flags
+
+Feature flags live in `lib/features.ts`, backed by `localStorage`. Read once at app mount; **page refresh required to apply changes** (acceptable v1 — simpler than reactive layout transitions).
+
+Current flags:
+- `FEATURES.uiGeneration` (default `false`) — gates the entire UI generation path.
+  - When **off** (Phase 1): single-column layout, no preview pane, system prompt strips UI rules + TSX instructions + SHADCN/OUTPUT_DISCIPLINE blocks. Prompt shrinks ~30K tokens; per-turn cost drops ~40-60%.
+  - When **on** (Phase 2): two-pane layout returns, preview iframe renders, full UI rules inject into the prompt, model emits `<preview>` TSX. Pre-cutover behavior intact.
+
+Toggle in the chat input footer → **Settings** popover → checkbox.
+
+---
+
 ## Architecture: the rules layer
 
-Fabric's core innovation is the rules layer — markdown files that constrain what the AI generates:
+The rules layer is **split** to support the Phase 1 / Phase 2 cutover:
 
-- **`frontend/src/rules/global.md`** — universal Wati rules (aesthetic, component vocabulary, tokens, slot patterns, hard rules)
-- **`frontend/src/rules/archetypes/*.md`** — page-type specific rules (analytics today; list, detail, form, etc. to come)
+- **`frontend/src/rules/global.md`** — *document structure rules*. Always injected, regardless of flag. Owns: status header tables, PRD section requirements, engineering doc section requirements, callout blockquote syntax, inline metadata badges, anti-patterns for doc shape.
+- **`frontend/src/rules/ui-generation/global-ui.md`** — *UI generation rules* (Phase 2). Owns: aesthetic, visual style, component vocabulary, tokens, slot patterns, mock data sourcing, UI hard rules. Injected only when `FEATURES.uiGeneration` is on.
+- **`frontend/src/rules/ui-generation/archetypes/*.md`** — page-type specific UI rules (analytics today). Phase 2.
 
-These are imported via Vite `?raw` syntax in `systemPrompt.ts` (lines 4-5) and injected into the system prompt after `OUTPUT_DISCIPLINE_RULES`, before WATI API context (lines 511-521). Injection markers use `##` heading style to match other rule blocks.
+Imports in `systemPrompt.ts` are unconditional (Vite bundles all rules either way). Runtime gating in `buildSystemPrompt()` branches the assembled prompt — when the flag is off, the UI rules block, the `<preview>` instructions, the shadcn rules, and the visual-output-discipline block are all omitted; an explicit "PRD-ONLY MODE: do not generate UI code" instruction takes their place.
 
 **Critical: rules files are bundled at build time.** Editing rules requires a Vite rebuild to take effect. No hot-reload — rules are inlined into the JS bundle.
 
 ---
 
-## Slot pattern (MANDATORY)
+## Phase 2 — gated by FEATURES.uiGeneration
+
+The sections below document UI-generation behavior. **None of this is active by default in Phase 1.** Flip `FEATURES.uiGeneration` on (Settings popover → checkbox → refresh) to activate.
+
+### Slot pattern (MANDATORY when UI gen is on)
 
 Generated UI must use slot placeholders, not real assets:
 
@@ -156,6 +180,8 @@ Cost copy format (verified working):
 - **Image attachment in chat input** — users can paste, drag-drop, or file-pick up to 5 images per message (PNG / JPEG / GIF / WebP, max 10 MB each, auto-compressed to JPEG@0.85 over 2 MB). Attached images render as thumbnail chips above the textarea with an X to remove. User messages with images render the thumbnails (max 120px) above the text bubble; clicking opens an inline lightbox modal (Esc/backdrop to close). Multimodal content is built per Anthropic SDK spec (`{ type: "image", source: { type: "base64", media_type, data }}` blocks before the text block). All attach affordances (paste/drop/picker button) are gated on `!isStreaming`. Persistence extends Go `ChatMessage` with `Images []ChatMessageImage` (omitempty). Wati-ify workflow (paste a Stripe screenshot + "rebuild this in Wati") works automatically via the existing rules layer — no rule changes required.
 - **Document structure enrichment** — PRDs, engineering docs, and quality docs now require status header tables, requirements tables, callout blockquotes for risks/assumptions/questions, and inline metadata badges. Rules-only change to global.md, no rendering modifications.
 - **Quality indicator strip** — three graphical chips (gap risk gauge, effort range bar, spec coverage stacked bar) computed via parallel Haiku calls after main stream completes. Renders below inline documents, above the usage/cost block. Click any chip to expand inline breakdown panel. Persisted in chat.json. Implementation lives in `frontend/src/lib/qualityMetrics.ts` (3 system prompts + JSON-validated parallel fire via `claude-haiku-4-5-20251001`) and `frontend/src/components/QualityMetricsStrip.tsx`. Fires only on artifact-producing turns (TSX or PRD); text-only assistant messages skip metrics. Per-chip failure degrades gracefully — surviving chips still render. Go side stores the JSON as `json.RawMessage` so the schema lives entirely in TS.
+- **Feature flag system** — `lib/features.ts` holds `FEATURES` backed by `localStorage` (`fabric_feature_flags` key). Read once at mount via `isUiGenerationEnabled()`. `setFeature(key, value)` mutates and persists; refresh required for layout changes to apply. First flag: `uiGeneration` (default `false`). Toggle UI lives in a Settings popover anchored to the chat input footer (replaces the prior "Reset key" link — Reset API key moved inside the popover).
+- **Phase 1 cutover — UI generation feature-flagged off by default.** Rules layer split: doc-structure rules in `rules/global.md` always inject; UI rules moved to `rules/ui-generation/global-ui.md` + `rules/ui-generation/archetypes/analytics.md`, gated behind `FEATURES.uiGeneration`. When flag off, `buildSystemPrompt()` emits an explicit "PRD-ONLY MODE: do not generate UI code" branch, drops the `<preview>` instructions, SHADCN_AVAILABILITY_RULES, and OUTPUT_DISCIPLINE_RULES blocks, and overrides the MANUS-mode plan template to a 4-item version (no "Build UI component" step). App.tsx hides the right-side preview pane via `uiGenEnabled && sessionHasPreview` — chat fills the full width. System prompt shrinks ~30K tokens; per-turn cost drops 40-60%. UI generation code intact and restorable by flipping the flag.
 
 ## Pending work (highest leverage first)
 

@@ -31,7 +31,7 @@ import { streamChat, type ClaudeContentBlock, type ClaudeMessage } from "@/lib/c
 import { buildSystemPrompt } from "@/lib/systemPrompt"
 import { computeQualityMetrics, type QualityMetrics } from "@/lib/qualityMetrics"
 import { QualityMetricsStrip } from "@/components/QualityMetricsStrip"
-import { setFeature, getFeatures } from "@/lib/features"
+import { isUiGenerationEnabled, setFeature, getFeatures } from "@/lib/features"
 import type { Usage } from "@anthropic-ai/sdk/resources/messages"
 import { main } from "../wailsjs/go/models"
 
@@ -963,6 +963,10 @@ export default function App() {
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
+  // Phase-1 cutover: UI generation is feature-flagged. Read once at mount;
+  // page refresh is required to apply changes (acceptable v1 — simpler than
+  // wiring reactive layout transitions everywhere this is read).
+  const [uiGenEnabled] = useState<boolean>(() => isUiGenerationEnabled())
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const showToast = useCallback((message: string) => {
@@ -2643,7 +2647,7 @@ export default function App() {
         )}
       </section>
 
-      {sessionHasPreview ? (
+      {uiGenEnabled && sessionHasPreview ? (
       <section
         className="flex h-full shrink-0 flex-col bg-white"
         style={{

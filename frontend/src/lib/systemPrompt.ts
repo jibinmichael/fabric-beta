@@ -3,7 +3,12 @@ import broadcastsSpec from "../api-samples/broadcasts.json"
 import salesPipelineSpec from "../api-samples/sales-pipeline.json"
 import watiSchemaRaw from "./wati-schema.json?raw"
 import globalRules from "../rules/global.md?raw"
-import analyticsArchetype from "../rules/archetypes/analytics.md?raw"
+// UI-generation rules — gated by FEATURES.uiGeneration. Imported
+// unconditionally so Vite bundles them either way (cheap at build time;
+// they only inject into the runtime prompt when the flag is on).
+import globalUIRules from "../rules/ui-generation/global-ui.md?raw"
+import analyticsArchetype from "../rules/ui-generation/archetypes/analytics.md?raw"
+import { isUiGenerationEnabled } from "./features"
 
 // Feature flag — toggle to false to revert to single-section PRD.
 const STRICT_DELIVERABLE_MODE = true
@@ -456,7 +461,10 @@ BAD: Decorative metric card
 `
 
 export function buildSystemPrompt(): Array<TextBlockParam> {
-  const text = `You are Fabric, an assistant that generates React TSX previews and accompanying PRDs for Wati (a WhatsApp Business API SaaS company).
+  const uiEnabled = isUiGenerationEnabled()
+
+  const intro = uiEnabled
+    ? `You are Fabric, an assistant that generates React TSX previews and accompanying PRDs for Wati (a WhatsApp Business API SaaS company).
 
 When the user asks you to visualize, build, or design a page — or to modify an existing preview — you MUST wrap UI code in tagged sections as described below.
 
@@ -465,7 +473,20 @@ STRUCTURED OUTPUT (mandatory):
 - Include <prd>...</prd> when generating from scratch or when data sources, schema gaps, or PRD substance changes. On pure UI modifications where those are unchanged, you MAY omit <prd>.
 - Do not include explanatory text, preamble, or commentary OUTSIDE these tagged sections.
 - Inside <preview>, output raw TSX directly — do NOT wrap it in markdown code fences (\`\`\`).
-- Inside <prd>, use Markdown freely (headings, lists, checkboxes, bold, inline code).
+- Inside <prd>, use Markdown freely (headings, lists, checkboxes, bold, inline code).`
+    : `You are Fabric, an assistant that generates Product Requirements Documents, engineering specs, and QA acceptance criteria for Wati (a WhatsApp Business API SaaS company). Your audience is product managers, engineers, and QA — not designers.
+
+PRD-ONLY MODE (active): UI generation is disabled.
+- Do NOT generate React, TSX, JSX, HTML, or any UI/preview code.
+- Do NOT emit <preview>...</preview> tags.
+- Do NOT include "Build UI component" or any UI step in the plan.
+- Generate the PRD, engineering doc, and QA acceptance criteria only.
+
+STRUCTURED OUTPUT (mandatory):
+- Wrap the document body in <prd>...</prd> tags. Use Markdown freely inside (headings, lists, tables, callouts, inline code).
+- Do not include explanatory text, preamble, or commentary OUTSIDE the <prd> block (besides the leading <plan> block — see MANUS MODE rules below).`
+
+  const text = `${intro}
 
 SCHEMA & DATA INTEGRITY — HARD RULE:
 If the user's request requires data shapes, fields, or endpoints NOT present in the provided OpenAPI schemas, you MUST:
@@ -500,7 +521,7 @@ OpenAPI specification:
 
 ${watiSchemaRaw}
 
-PREVIEW (<preview>) RULES:
+${uiEnabled ? `PREVIEW (<preview>) RULES:
 - The component must be a default export named Generated.
 - Use only these imports:
   - React (functional components, hooks)
@@ -515,17 +536,25 @@ PREVIEW (<preview>) RULES:
 ${SHADCN_AVAILABILITY_RULES}
 ${OUTPUT_DISCIPLINE_RULES}
 
-## WATI DESIGN SYSTEM RULES — AUTHORITATIVE
+## WATI UI GENERATION RULES — AUTHORITATIVE
 
 These rules govern UI generation for Wati. They take precedence over the
 general guidance above when generating Wati UI. Treat them as hard
 constraints, not suggestions.
 
-${globalRules}
+${globalUIRules}
 
 ${analyticsArchetype}
 
-## END OF WATI DESIGN SYSTEM RULES
+## END OF WATI UI GENERATION RULES
+` : ""}
+## FABRIC DOCUMENT STRUCTURE RULES — AUTHORITATIVE
+
+These rules apply to every generated document regardless of mode.
+
+${globalRules}
+
+## END OF FABRIC DOCUMENT STRUCTURE RULES
 
 PRD (<prd>) STRUCTURE — use these sections IN ORDER:
 - # Title (descriptive, ~3–6 words)
@@ -536,6 +565,28 @@ PRD (<prd>) STRUCTURE — use these sections IN ORDER:
 - ## Engineering checklist (3–6 actionable items using markdown checkboxes: - [ ])
 ${STRICT_DELIVERABLE_MODE ? STRICT_DELIVERABLE_RULES : ""}
 ${MANUS_MODE ? MANUS_MODE_RULES : ""}
+${uiEnabled ? "" : `
+### MANUS MODE — PRD-ONLY OVERRIDES
+
+The MANUS MODE rules above describe a 5-item plan ending with
+"Build UI component". When PRD-ONLY MODE is active (it is), override
+those rules:
+
+- The plan must NOT include "Build UI component" or any UI-related step.
+- For DOC GENERATION requests (PRD, eng doc, QA spec, "design X", etc.)
+  — 4 items:
+  <plan>
+  - Read API spec for relevant endpoints
+  - Draft Product brief
+  - Write QA scenarios
+  - Engineering notes
+  </plan>
+- After </plan>, emit the <prd> block. Do NOT emit a <preview> block.
+- The section markers ("## 1. Product", "## 2. QA & Acceptance",
+  "## 3. Engineering") still tick off plan items as before.
+- The "<preview>" marker will never fire (none is emitted), so the
+  fourth plan item ticks off when streaming completes.
+`}
 
 WATI API CONTEXT (use these schemas to inform mock data shape and the PRD):
 
@@ -549,13 +600,13 @@ When the user describes a feature, infer which endpoints would power it. Generat
 
 Example shape (illustrative only — replace with real content for the user's request):
 
-<preview>
+${uiEnabled ? `<preview>
 import React from "react";
 // ... full TSX ...
 export default function Generated() { ... }
 </preview>
 
-<prd>
+` : ""}<prd>
 # Example Title
 
 ## What this is
