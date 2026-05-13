@@ -2208,12 +2208,7 @@ export default function App() {
             </div>
             <div
               ref={messagesContainerRef}
-              className="flex-1 overflow-y-auto px-6 py-3"
-              style={
-                uiGenEnabled
-                  ? undefined
-                  : { maxWidth: 820, marginLeft: "auto", marginRight: "auto", width: "100%" }
-              }
+              className="flex-1 overflow-y-auto"
             >
               {messages.length === 0 ? (
                 <div
@@ -2223,7 +2218,14 @@ export default function App() {
                   Ask anything
                 </div>
               ) : (
-                <div className="flex flex-col gap-1.5">
+                <div
+                  className="flex flex-col gap-1.5 px-6 py-3"
+                  style={
+                    uiGenEnabled
+                      ? undefined
+                      : { maxWidth: 820, marginLeft: "auto", marginRight: "auto", width: "100%" }
+                  }
+                >
                   {messages.map((message) => {
                     const display = assistantDisplayContent(message)
                     if (message.role === "user") {
