@@ -39,6 +39,10 @@ type ChatMessage struct {
 	TsxGenerated bool               `json:"tsx_generated,omitempty"`
 	CreatedAt    time.Time          `json:"created_at,omitempty"`
 	Images       []ChatMessageImage `json:"images,omitempty"`
+	// QualityMetrics is an opaque JSON blob owned by the frontend
+	// (see frontend/src/lib/qualityMetrics.ts). Stored verbatim so the
+	// Go side does not have to mirror the schema.
+	QualityMetrics json.RawMessage `json:"quality_metrics,omitempty"`
 }
 
 type chatFile struct {

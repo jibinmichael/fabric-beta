@@ -29,6 +29,8 @@ import { EventsOn } from "../wailsjs/runtime/runtime"
 import { MoreHorizontal, ChevronRight, ChevronDown, FileText, CheckCircle, Wrench, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, X as XIcon } from "lucide-react"
 import { streamChat, type ClaudeContentBlock, type ClaudeMessage } from "@/lib/claude"
 import { buildSystemPrompt } from "@/lib/systemPrompt"
+import { computeQualityMetrics, type QualityMetrics } from "@/lib/qualityMetrics"
+import { QualityMetricsStrip } from "@/components/QualityMetricsStrip"
 import type { Usage } from "@anthropic-ai/sdk/resources/messages"
 import { main } from "../wailsjs/go/models"
 
@@ -112,6 +114,8 @@ type Message = {
   usage?: Usage
   timestamp?: Date
   images?: ChatImage[]
+  qualityMetrics?: QualityMetrics | null
+  qualityMetricsLoading?: boolean
 }
 
 type SessionMetaView = {
@@ -554,6 +558,9 @@ function chatMessagesToUi(messages: main.ChatMessage[] | undefined | null): Mess
               filename: img.filename,
             }))
         : undefined
+    const rawQualityMetrics = (row as unknown as { quality_metrics?: QualityMetrics }).quality_metrics
+    const qualityMetrics =
+      rawQualityMetrics && typeof rawQualityMetrics === "object" ? rawQualityMetrics : undefined
     return {
       id: `persisted-${index}-${row.role}`,
       role: row.role as "user" | "assistant",
@@ -567,6 +574,7 @@ function chatMessagesToUi(messages: main.ChatMessage[] | undefined | null): Mess
       deliverable,
       timestamp,
       images,
+      qualityMetrics,
     }
   })
 }
@@ -585,6 +593,9 @@ function uiMessagesToChatPayload(messages: Message[]): main.ChatMessage[] {
       }
       if (m.images && m.images.length > 0) {
         payload.images = m.images
+      }
+      if (m.qualityMetrics) {
+        payload.quality_metrics = m.qualityMetrics
       }
       return new main.ChatMessage(payload)
     })
@@ -1227,6 +1238,47 @@ export default function App() {
     [activeSessionId, refreshSessionList],
   )
 
+  // Fire quality-metric Haiku calls after an artifact-producing
+  // assistant message lands. Three calls run in parallel; the result is
+  // persisted so sessions reload without recomputing. Errors are swallowed
+  // — the strip falls back to whatever subset of metrics succeeded.
+  const triggerQualityMetrics = useCallback(
+    async (messageId: string, content: string) => {
+      if (!apiKey) return
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId ? { ...msg, qualityMetricsLoading: true } : msg,
+        ),
+      )
+      try {
+        const metrics = await computeQualityMetrics(apiKey, content)
+        setMessages((prev) => {
+          const next = prev.map((msg) =>
+            msg.id === messageId
+              ? { ...msg, qualityMetrics: metrics, qualityMetricsLoading: false }
+              : msg,
+          )
+          void persistChat(next)
+          return next
+        })
+      } catch (err) {
+        console.error("computeQualityMetrics:", err)
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  qualityMetricsLoading: false,
+                  qualityMetrics: { gapRisk: null, effortEstimate: null, specCoverage: null },
+                }
+              : msg,
+          ),
+        )
+      }
+    },
+    [apiKey, persistChat],
+  )
+
   const canSend = useMemo(() => {
     return (
       Boolean(apiKey) &&
@@ -1724,6 +1776,7 @@ export default function App() {
               return next
             })
             showToast("Preview ready")
+            void triggerQualityMetrics(assistantPlaceholder.id, fullText)
           } catch (err) {
             console.error("Failed to save preview:", err)
             setMessages((prev) => {
@@ -1766,6 +1819,7 @@ export default function App() {
               return next
             })
             showToast("PRD ready")
+            void triggerQualityMetrics(assistantPlaceholder.id, fullText)
           } catch (err) {
             console.error("Failed to save PRD:", err)
             setMessages((prev) => {
@@ -2277,6 +2331,12 @@ export default function App() {
                         ) : null}
                         {MANUS_CARDS_MODE && message.deliverable ? (
                           <DeliverableView deliverable={message.deliverable} />
+                        ) : null}
+                        {message.qualityMetrics || message.qualityMetricsLoading ? (
+                          <QualityMetricsStrip
+                            metrics={message.qualityMetrics ?? null}
+                            loading={Boolean(message.qualityMetricsLoading)}
+                          />
                         ) : null}
                         {message.usage ? (() => {
                           const inputTok = message.usage.input_tokens

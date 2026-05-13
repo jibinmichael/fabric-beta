@@ -23,6 +23,7 @@ export namespace main {
 	    // Go type: time
 	    created_at?: any;
 	    images?: ChatMessageImage[];
+	    quality_metrics?: number[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatMessage(source);
@@ -35,6 +36,7 @@ export namespace main {
 	        this.tsx_generated = source["tsx_generated"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.images = this.convertValues(source["images"], ChatMessageImage);
+	        this.quality_metrics = source["quality_metrics"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
