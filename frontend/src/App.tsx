@@ -2591,7 +2591,6 @@ export default function App() {
                             backgroundColor: "#FFFFFF",
                             border: "1px solid #DDDDDD",
                             borderRadius: 8,
-                            boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
                             padding: 12,
                             zIndex: 40,
                             fontSize: 12,
