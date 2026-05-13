@@ -2206,7 +2206,15 @@ export default function App() {
             >
               {sessionTitle}
             </div>
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-6 py-3">
+            <div
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto px-6 py-3"
+              style={
+                uiGenEnabled
+                  ? undefined
+                  : { maxWidth: 820, marginLeft: "auto", marginRight: "auto", width: "100%" }
+              }
+            >
               {messages.length === 0 ? (
                 <div
                   className="flex h-full items-center justify-center text-[14px] font-normal"
@@ -2440,7 +2448,14 @@ export default function App() {
                   Drop image to attach
                 </div>
               ) : null}
-              <div className="flex flex-col gap-2">
+              <div
+                className="flex flex-col gap-2"
+                style={
+                  uiGenEnabled
+                    ? undefined
+                    : { maxWidth: 820, marginLeft: "auto", marginRight: "auto", width: "100%" }
+                }
+              >
                 {isViewingOlder && selectedVersionIndex !== null ? (
                   <div
                     style={{
